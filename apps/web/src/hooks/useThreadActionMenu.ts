@@ -17,7 +17,11 @@ import {
 import { useRouter } from "@tanstack/react-router";
 import { msg } from "gt-react";
 
-import { pickSnoozePreset, resolveSnoozePresets } from "../components/Sidebar.snooze";
+import {
+  pickSnoozePreset,
+  resolveSnoozeDrillDown,
+  resolveSnoozePresets,
+} from "../components/Sidebar.snooze";
 import {
   buildThreadActionMenuItems,
   threadActionRequiresOperate,
@@ -152,6 +156,7 @@ export function useThreadActionMenu(input: {
         isRunning: !threadRuntimeCanArchive(thread.runtime),
         supports,
         snoozePresets,
+        snoozeMenu: resolveSnoozeDrillDown(now, timestampFormat),
         canShareWithGuest,
         canTurnIntoProject: canTurnThreadIntoProject(threadRef),
       });

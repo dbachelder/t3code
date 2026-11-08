@@ -102,6 +102,7 @@ vi.mock("../components/Sidebar.snooze", () => ({
   resolveSnoozePresets: () => [
     { id: "hour", label: "In 1 hour", whenLabel: "3 PM", snoozedUntil: "2099-01-01T00:00:00Z" },
   ],
+  resolveSnoozeDrillDown: () => [],
   snoozeWakeDescription: () => "later",
 }));
 vi.mock("./useCopyToClipboard", () => ({

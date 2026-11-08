@@ -4,7 +4,9 @@ import { msg } from "gt-react";
 import {
   pickSnoozePreset as pickSharedSnoozePreset,
   resolveSnoozePresets as resolveSharedSnoozePresets,
+  snoozeDrillDownMenu,
   snoozeWakeLabel,
+  type SnoozeMenuNode,
   type SnoozePreset,
 } from "@t3tools/client-runtime/state/thread-settled";
 
@@ -24,6 +26,18 @@ export function resolveSnoozePresets(
   resolve: MessageResolver = m,
 ): ReadonlyArray<SnoozePreset> {
   return resolveSharedSnoozePresets(now, snoozeOptions(timestampFormat, environmentId), resolve);
+}
+
+export function resolveSnoozeDrillDown(
+  now: Date,
+  timestampFormat: TimestampFormat,
+  resolve: MessageResolver = m,
+): ReadonlyArray<SnoozeMenuNode> {
+  return snoozeDrillDownMenu(
+    now,
+    (date) => formatShortTimestamp(date.toISOString(), timestampFormat),
+    resolve,
+  );
 }
 
 /** A shown menu choice as picked; see the shared `pickSnoozePreset`. */

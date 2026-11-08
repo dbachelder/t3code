@@ -32,7 +32,12 @@ import {
 } from "@t3tools/contracts";
 import { toServerClock } from "@t3tools/client-runtime/clock";
 import type { SnoozePresetSetting } from "@t3tools/contracts/settings";
-import { canSnooze } from "@t3tools/client-runtime/state/thread-settled";
+import {
+  canSnooze,
+  localSnoozeDate,
+  snoozeDrillDownMenu,
+  type SnoozeMenuNode,
+} from "@t3tools/client-runtime/state/thread-settled";
 import { threadChipCopyTarget } from "@t3tools/client-runtime/thread-reference";
 import type { MenuAction } from "@react-native-menu/menu";
 import { useNavigation } from "@react-navigation/native";
@@ -987,6 +992,20 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     },
     m,
   );
+  // The drill-down only changes with the date, so it rebuilds daily, not with the presets' minute.
+  const snoozeMenuDay =
+    swipeActions.secondary === "snooze"
+      ? localSnoozeDate(new Date(props.snoozePresetMinute || snoozeGateNow))
+      : null;
+  const snoozeDrillDownActions = useMemo<MenuAction[]>(() => {
+    if (snoozeMenuDay === null) return [];
+    const toAction = (node: SnoozeMenuNode): MenuAction => ({
+      id: `snooze:${node.id}`,
+      title: node.label,
+      ...(node.children ? { subactions: node.children.map(toAction) } : {}),
+    });
+    return snoozeDrillDownMenu(new Date(`${snoozeMenuDay}T00:00:00`), undefined, m).map(toAction);
+  }, [m, snoozeMenuDay]);
   const snoozePresetActions = useMemo<MenuAction[]>(
     () => [
       ...snoozePresets.map((preset) => ({
@@ -994,9 +1013,10 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         title: preset.label,
         subtitle: preset.whenLabel,
       })),
+      ...snoozeDrillDownActions,
       { id: "snooze:custom", title: gt("Custom…", { $context: "custom snooze time" }) },
     ],
-    [gt, snoozePresets],
+    [gt, snoozePresets, snoozeDrillDownActions],
   );
   const reorderMenuItems = useMemo<MenuAction[]>(
     () =>
