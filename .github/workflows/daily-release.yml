@@ -1,0 +1,300 @@
+name: Daily release
+
+# Rebuilds each upstream nightly with the `daily` branch's patches and publishes it here
+# under the same version. The desktop app built here updates from this repository's
+# releases; `t3` hosts follow it with T3CODE_RELEASE_BASE_URL (see README.md).
+
+on:
+  schedule:
+    - cron: "23 */4 * * *"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Upstream nightly tag to build. Default: the newest."
+        required: false
+
+concurrency:
+  group: daily-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  UPSTREAM: https://github.com/pingdotgg/t3code
+  # Builds outside pingdotgg/t3code report "dev" telemetry, as upstream's own previews do.
+  T3CODE_TELEMETRY_CHANNEL: dev
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+      build: ${{ steps.tag.outputs.build }}
+    steps:
+      - id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="${REQUESTED:-$(git ls-remote --tags --refs "$UPSTREAM" 'v*-nightly.*' | sed 's|.*refs/tags/||' | sort -V | tail -n1)}"
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]{8}\.[0-9]+$ ]] || { echo "Not a nightly tag: $tag" >&2; exit 1; }
+          build=true
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then build=false; fi
+          echo "$tag: build=$build"
+          { echo "tag=$tag"; echo "version=${tag#v}"; echo "build=$build"; } >> "$GITHUB_OUTPUT"
+
+      - if: steps.tag.outputs.build == 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: pingdotgg/t3code
+          ref: refs/tags/${{ steps.tag.outputs.tag }}
+          fetch-depth: 0
+          filter: blob:none
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      # A conflict fails here, before any build, and nothing is published.
+      - name: Apply the daily branch
+        if: steps.tag.outputs.build == 'true'
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "daily-release"
+          git config user.email "daily-release@users.noreply.github.com"
+          git fetch -q "https://github.com/$GITHUB_REPOSITORY" daily:refs/remotes/fork/daily
+          git log --oneline "$TAG..fork/daily"
+          git cherry-pick "$TAG..fork/daily"
+          git diff --binary "$TAG" HEAD > "$RUNNER_TEMP/daily.patch"
+
+      - if: steps.tag.outputs.build == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: daily-patch
+          path: ${{ runner.temp }}/daily.patch
+          if-no-files-found: error
+          retention-days: 3
+
+  bundle:
+    needs: resolve
+    if: needs.resolve.outputs.build == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      TAG: ${{ needs.resolve.outputs.tag }}
+      VERSION: ${{ needs.resolve.outputs.version }}
+    steps:
+      - &checkout
+        uses: actions/checkout@v6
+        with:
+          repository: pingdotgg/t3code
+          ref: refs/tags/${{ needs.resolve.outputs.tag }}
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+      - &download-patch
+        uses: actions/download-artifact@v8
+        with:
+          name: daily-patch
+          path: ${{ runner.temp }}/daily-patch
+      # The Clerk and relay ids are public; upstream's previews read the same file.
+      - &prepare
+        name: Apply patches and load public config
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply --binary "$RUNNER_TEMP/daily-patch/daily.patch"
+          sed -n -E 's/^(T3CODE_(CLERK_PUBLISHABLE_KEY|CLERK_JWT_TEMPLATE|CLERK_CLI_OAUTH_CLIENT_ID|RELAY_URL)=.*)$/\1/p' .env.example >> "$GITHUB_ENV"
+
+      - uses: ./.github/actions/setup-ci-deps
+        with:
+          install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
+
+      - &versions
+        name: Align package versions to the release
+        run: node scripts/update-release-package-versions.ts "$VERSION"
+
+      - run: vp run build:desktop:bundle
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: js-bundle
+          path: |
+            apps/server/dist
+            apps/desktop/dist-electron
+          if-no-files-found: error
+          retention-days: 1
+
+  mac:
+    needs: [resolve, bundle]
+    runs-on: macos-15
+    timeout-minutes: 75
+    env:
+      TAG: ${{ needs.resolve.outputs.tag }}
+      VERSION: ${{ needs.resolve.outputs.version }}
+    steps:
+      - *checkout
+      - *download-patch
+      - *prepare
+
+      - uses: ./.github/actions/setup-ci-deps
+        with:
+          install-args: --filter=@t3tools/desktop... --filter=t3... --filter=@t3tools/scripts...
+
+      - *versions
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: js-bundle
+          path: apps
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - run: cargo build --locked --release --manifest-path native/resource-monitor/Cargo.toml --target aarch64-apple-darwin
+
+      # electron-builder only signs with an identity macOS trusts for code signing.
+      - name: Trust the signing certificate
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$CSC_LINK" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          /usr/bin/openssl pkcs12 -in "$RUNNER_TEMP/signing.p12" -clcerts -nokeys -passin env:CSC_KEY_PASSWORD -out "$RUNNER_TEMP/signing.pem"
+          rm "$RUNNER_TEMP/signing.p12"
+          sudo security add-trusted-cert -d -r trustRoot -p codeSign -k /Library/Keychains/System.keychain "$RUNNER_TEMP/signing.pem"
+          echo "CERT_SHA1=$(/usr/bin/openssl x509 -in "$RUNNER_TEMP/signing.pem" -noout -fingerprint -sha1 | sed 's/.*=//; s/://g')" >> "$GITHUB_ENV"
+
+      - name: Build signed desktop app
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          T3CODE_DESKTOP_REUSE_RESOURCE_MONITOR: true
+        run: node scripts/build-desktop-artifact.ts --platform mac --target dmg --arch arm64 --build-version "$VERSION" --skip-build --signed --verbose
+
+      # The in-app updater only installs a build that meets the running app's designated
+      # requirement, so every release must pin the same certificate rather than its own hash.
+      - name: Check the update is installable over the last one
+        run: |
+          set -euo pipefail
+          ditto -x -k release/*.zip "$RUNNER_TEMP/zip-app"
+          app=$(ls -d "$RUNNER_TEMP"/zip-app/*.app)
+          codesign --verify --deep --strict --verbose=2 "$app"
+          requirement=$(codesign -d -r- "$app" 2>&1 | sed -n 's/^designated => //p')
+          echo "$requirement"
+          [[ "$requirement" == *"identifier \"com.t3tools.t3code\""* ]]
+          [[ "$requirement" == *"certificate leaf = H\"$(echo "$CERT_SHA1" | tr 'A-F' 'a-f')\""* ]]
+          grep -q "dbachelder/t3code" "$app/Contents/Resources/app-update.yml"
+          cat "$app/Contents/Resources/app-update.yml"
+
+      - name: Launch check
+        run: |
+          set -euo pipefail
+          mount="$RUNNER_TEMP/desktop-launch-dmg"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount" "$(ls release/*.dmg)"
+          trap 'hdiutil detach "$mount" -force >/dev/null || true' EXIT
+          app=$(ls -d "$mount"/*.app)
+          executable=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$app/Contents/Info.plist")
+          node scripts/smoke-desktop-app.ts --artifacts-dir "$RUNNER_TEMP/desktop-launch-check" --executable "$app/Contents/MacOS/$executable"
+
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-launch-check
+          path: ${{ runner.temp }}/desktop-launch-check
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desktop-mac
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.blockmap
+            release/*-mac.yml
+          if-no-files-found: error
+          compression-level: 0
+
+  linux:
+    needs: [resolve, bundle]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      TAG: ${{ needs.resolve.outputs.tag }}
+      VERSION: ${{ needs.resolve.outputs.version }}
+    steps:
+      - *checkout
+      - *download-patch
+      - *prepare
+
+      - uses: ./.github/actions/setup-ci-deps
+        with:
+          install-args: --filter=@t3tools/desktop... --filter=t3... --filter=@t3tools/scripts...
+
+      - *versions
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: js-bundle
+          path: apps
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Build CLI archive
+        run: |
+          set -euo pipefail
+          cargo build --locked --release --manifest-path native/resource-monitor/Cargo.toml --target x86_64-unknown-linux-gnu
+          monitor_dir="$RUNNER_TEMP/cli-resource-monitor/linux-x64"
+          mkdir -p "$monitor_dir"
+          cp native/resource-monitor/target/x86_64-unknown-linux-gnu/release/t3-resource-monitor "$monitor_dir/"
+          command -v patchelf || { sudo apt-get update && sudo apt-get install -y patchelf; }
+          node scripts/apply-web-brand-assets.ts nightly apps/server/dist/client
+          node apps/server/scripts/cli.ts build-exe --verbose
+          node scripts/build-cli-archive.ts --platform linux --arch x64 --version "$VERSION" \
+            --resource-monitor-dir "$RUNNER_TEMP/cli-resource-monitor" --output-dir release-cli
+          node scripts/smoke-cli-archive.ts --archive release-cli/* --expect-version "$VERSION"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cli-linux-x64
+          path: release-cli/*
+          if-no-files-found: error
+          compression-level: 0
+
+  publish:
+    needs: [resolve, mac, linux]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: desktop-mac
+          path: assets
+      - uses: actions/download-artifact@v8
+        with:
+          name: cli-linux-x64
+          path: assets
+
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          cd assets
+          sha256sum t3-* > SHA256SUMS
+          ls -l
+          gh release create "$TAG" -R "$GITHUB_REPOSITORY" --target fork-ci --prerelease \
+            --title "$TAG (daily)" \
+            --notes "Upstream [$TAG]($UPSTREAM/releases/tag/$TAG) with the [daily](https://github.com/$GITHUB_REPOSITORY/commits/daily) branch's patches." \
+            ./*
