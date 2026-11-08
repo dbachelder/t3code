@@ -227,7 +227,7 @@ jobs:
   linux:
     needs: [resolve, bundle]
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 75
     env:
       TAG: ${{ needs.resolve.outputs.tag }}
       VERSION: ${{ needs.resolve.outputs.version }}
@@ -272,6 +272,45 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
+      # Linux builds are unsigned upstream too; the updater checks the feed's sha512 instead.
+      - name: Build desktop app
+        env:
+          T3CODE_DESKTOP_REUSE_RESOURCE_MONITOR: true
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libsecret-1-dev pkg-config imagemagick xvfb
+          node scripts/build-desktop-artifact.ts --platform linux --target AppImage --arch x64 --build-version "$VERSION" --skip-build --verbose
+          cat release/nightly-linux.yml
+
+      - name: Launch check
+        run: |
+          set -euo pipefail
+          appimage=$(ls "$GITHUB_WORKSPACE"/release/*.AppImage)
+          chmod +x "$appimage"
+          (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract >/dev/null)
+          cat "$RUNNER_TEMP/squashfs-root/resources/app-update.yml"
+          grep -q "^owner: dbachelder$" "$RUNNER_TEMP/squashfs-root/resources/app-update.yml"
+          xvfb-run -a node scripts/smoke-desktop-app.ts --artifacts-dir "$RUNNER_TEMP/desktop-launch-check" --executable "$RUNNER_TEMP/squashfs-root/t3code"
+
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-launch-check-linux
+          path: ${{ runner.temp }}/desktop-launch-check
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desktop-linux
+          path: |
+            release/*.AppImage
+            release/*.deb
+            release/*.blockmap
+            release/*-linux.yml
+          if-no-files-found: error
+          compression-level: 0
+
   publish:
     needs: [resolve, mac, linux]
     runs-on: ubuntu-24.04
@@ -284,6 +323,10 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: cli-linux-x64
+          path: assets
+      - uses: actions/download-artifact@v8
+        with:
+          name: desktop-linux
           path: assets
 
       - env:
