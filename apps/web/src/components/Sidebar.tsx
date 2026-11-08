@@ -178,6 +178,7 @@ import { ProjectEnvironmentBadge } from "./ProjectEnvironmentBadge";
 import { ProjectRowActions } from "./ProjectComboboxRow";
 import {
   buildDraftActionMenuItems,
+  buildSnoozeMenuChildren,
   buildThreadActionMenuItems,
   canMarkLatestRunUnread,
   isThreadTriageAction,
@@ -231,6 +232,7 @@ import { createSidebarListMotion } from "./Sidebar.motion";
 import { createSidebarShiftGuard } from "./Sidebar.shiftGuard";
 import {
   pickSnoozePreset,
+  resolveSnoozeDrillDown,
   resolveSnoozePresets,
   snoozeWakeLabel,
   type SnoozePreset,
@@ -2449,20 +2451,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                     id: "snooze",
                     label: gt("Snooze ({count})", { count }),
                     disabled: !canOperateThreads(selectedThreads, true),
-                    children: [
-                      ...snoozePresets.map((preset) => ({
-                        id: `snooze:${preset.id}`,
-                        label: preset.label,
-                        detail: preset.whenLabel,
-                        disabled: !canOperateThreads(selectedThreads, true),
-                      })),
-                      {
-                        id: "snooze:custom",
-                        label: gt("Custom…"),
-                        separatorBefore: snoozePresets.length > 0,
-                        disabled: !canOperateThreads(selectedThreads, true),
-                      },
-                    ],
+                    children: buildSnoozeMenuChildren(
+                      snoozePresets,
+                      resolveSnoozeDrillDown(menuOpenedAt, timestampFormat),
+                    ),
                   },
                 ]
               : []),
@@ -2793,6 +2785,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 titleRegeneration: configLoaded,
               },
               snoozePresets,
+              snoozeMenu: resolveSnoozeDrillDown(new Date(), timestampFormat),
             }),
             position,
             source,
