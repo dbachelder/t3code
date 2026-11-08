@@ -4,8 +4,9 @@ Upstream [T3 Code](https://github.com/pingdotgg/t3code) nightlies with a few loc
 
 - `daily`: the patches, on top of an upstream nightly tag.
 - `fork-ci` (default branch): `.github/workflows/daily-release.yml`. Every 4 hours it takes the
-  newest upstream nightly tag, cherry-picks `daily` onto it, builds the macOS arm64 app and the
-  Linux x64 `t3` archive, and publishes them here as a release with the same version. If the
+  newest upstream nightly tag, cherry-picks `daily` onto it, builds the macOS arm64 app, the
+  Linux x64 app (AppImage and .deb) and the Linux x64 `t3` archive, and publishes them here as a
+  release with the same version. If the
   patches stop applying, the run fails and nothing is published.
 
 The macOS app is signed with a self-signed certificate (secrets `CSC_LINK`, `CSC_KEY_PASSWORD`). The in-app
@@ -17,6 +18,11 @@ updater only installs builds signed by the same certificate, so do not replace i
 `/Applications/T3 Code (Nightly).app`, then run
 `xattr -dr com.apple.quarantine "/Applications/T3 Code (Nightly).app"` (the app is not notarized).
 After that, Settings → About updates from this repository.
+
+**Linux desktop (x64):** quit T3 Code and install the newest release's `.deb`
+(`sudo apt install ./T3-Code-*-amd64.deb`) or AppImage in place of the official one. Linux builds
+are unsigned, upstream's included, so nothing else changes; the in-app updater then follows this
+repository.
 
 **`t3` hosts (Linux x64):** point the service and your shell at this repository's archives:
 
