@@ -193,7 +193,7 @@ jobs:
           echo "$requirement"
           [[ "$requirement" == *"identifier \"com.t3tools.t3code\""* ]]
           [[ "$requirement" == *"certificate leaf = H\"$(echo "$CERT_SHA1" | tr 'A-F' 'a-f')\""* ]]
-          grep -q "dbachelder/t3code" "$app/Contents/Resources/app-update.yml"
+          grep -q "^owner: dbachelder$" "$app/Contents/Resources/app-update.yml"
           cat "$app/Contents/Resources/app-update.yml"
 
       - name: Launch check
