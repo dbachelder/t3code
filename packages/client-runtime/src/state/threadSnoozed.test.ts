@@ -12,6 +12,7 @@ import {
   hasQueuedTurnStart,
   pickSnoozePreset,
   resolveSnoozePresets,
+  snoozeDrillDownMenu,
   threadRaisedHandWhileSnoozed,
   threadWokeAt,
   isThreadWokeUnseen,
@@ -475,6 +476,46 @@ describe("pickSnoozePreset", () => {
       now: localDate(2026, 8, 31, 0, 1),
     });
     expect(picked?.snoozedUntil).toBe(localDate(2026, 8, 31, 9).toISOString());
+  });
+
+  it("resolves drill-down picks: durations from the pick, next-week times as shown", () => {
+    const shown = resolveSnoozePresets(localDate(2026, 8, 30, 23, 59));
+    const pick = (id: string, now: Date) => pickSnoozePreset({ shown, id, now })?.snoozedUntil;
+    const pickedAt = localDate(2026, 9, 2, 10, 15);
+    expect(pick("in:hours:3", pickedAt)).toBe(localDate(2026, 9, 2, 13, 15).toISOString());
+    expect(pick("in:days:2", pickedAt)).toBe(localDate(2026, 9, 4, 10, 15).toISOString());
+    const nineAm = localDate(2026, 9, 7, 9).toISOString();
+    expect(pick(`until:${nineAm}`, pickedAt)).toBe(nineAm);
+    expect(pick(`until:${nineAm}`, localDate(2026, 9, 7, 9))).toBeUndefined();
+  });
+});
+
+describe("snoozeDrillDownMenu", () => {
+  const nextWeek = (now: Date) => {
+    const days = snoozeDrillDownMenu(now).find((node) => node.id === "next-week")!.children!;
+    return days.map((day) => [day.id, day.children!.length, day.children![9]!.id]);
+  };
+
+  it("lists Monday to Friday of the coming week, each with 24 hours", () => {
+    const week = (dates: ReadonlyArray<number>) =>
+      dates.map((date) => [
+        `next-week:2026-09-${String(date).padStart(2, "0")}`,
+        24,
+        `until:${localDate(2026, 9, date, 9).toISOString()}`,
+      ]);
+    // Sunday: next week starts tomorrow. Monday: it starts a week out.
+    expect(nextWeek(localDate(2026, 9, 6, 14))).toEqual(week([7, 8, 9, 10, 11]));
+    expect(nextWeek(localDate(2026, 8, 31, 14))).toEqual(week([7, 8, 9, 10, 11]));
+  });
+
+  it("offers 1 to 24 hours and 1 to 14 days", () => {
+    const groups = snoozeDrillDownMenu(localDate(2026, 9, 2, 10)).find(
+      (node) => node.id === "in",
+    )!.children!;
+    expect(groups.map((group) => group.children!.map((leaf) => leaf.id).at(-1))).toEqual([
+      "in:hours:24",
+      "in:days:14",
+    ]);
   });
 });
 

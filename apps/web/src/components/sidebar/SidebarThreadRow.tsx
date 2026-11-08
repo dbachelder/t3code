@@ -14,6 +14,7 @@ import {
   canSnooze,
   hasQueuedTurnStart,
   QUEUED_TURN_START_GRACE_MS,
+  type SnoozeMenuNode,
 } from "@t3tools/client-runtime/state/thread-settled";
 import { formatDiffCount } from "@t3tools/client-runtime/diff-count";
 import {
@@ -106,7 +107,12 @@ import {
   useLinkedThreadPullRequest,
   ThreadSearchPullRequestNumber,
 } from "../ThreadStatusIndicators";
-import { pickSnoozePreset, resolveSnoozePresets, type SnoozePreset } from "../Sidebar.snooze";
+import {
+  pickSnoozePreset,
+  resolveSnoozeDrillDown,
+  resolveSnoozePresets,
+  type SnoozePreset,
+} from "../Sidebar.snooze";
 import { useThreadShell } from "../../state/entities";
 import { ProjectFavicon, type ProjectFaviconProject } from "../ProjectFavicon";
 import { ThreadSearchMatchExcerpt } from "../ThreadSearchMatch";
@@ -117,7 +123,17 @@ import { shouldShowInstanceBadge, type ProviderInstanceEntry } from "../../provi
 import { useThreadRunningTerminalIds } from "../../state/terminalSessions";
 import { InlineButton } from "../ui/button";
 import { Kbd } from "../ui/kbd";
-import { Menu, MenuItem, MenuItemDetail, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
+import {
+  Menu,
+  MenuItem,
+  MenuItemDetail,
+  MenuPopup,
+  MenuSeparator,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
+  MenuTrigger,
+} from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { MiddleTruncate } from "../ui/middle-truncate";
 import { useThreadHasUnsentDraft } from "../../composerDraftStore";
@@ -381,6 +397,31 @@ function SnoozeMenuButton(props: {
     ? // oxlint-disable-next-line react/purity -- Presets are resolved only while the menu is open, so each opening reads a fresh time.
       resolveSnoozePresets(new Date(), timestampFormat, environmentId)
     : [];
+  const drillDown = open
+    ? // oxlint-disable-next-line react/purity -- Read only while the menu is open, like the presets.
+      resolveSnoozeDrillDown(new Date(), timestampFormat)
+    : [];
+  const pick = (id: string) => {
+    const picked = pickSnoozePreset(presets, id, timestampFormat, environmentId);
+    if (picked) onSnooze(picked);
+  };
+  const renderNode = (node: SnoozeMenuNode): ReactNode =>
+    node.children ? (
+      <MenuSub key={node.id}>
+        <MenuSubTrigger>{node.label}</MenuSubTrigger>
+        <MenuSubPopup>{node.children.map(renderNode)}</MenuSubPopup>
+      </MenuSub>
+    ) : (
+      <MenuItem
+        key={node.id}
+        onClick={(event) => {
+          event.stopPropagation();
+          pick(node.id);
+        }}
+      >
+        {node.label}
+      </MenuItem>
+    );
   return (
     <Menu open={open} onOpenChange={onOpenChange}>
       <Tooltip>
@@ -409,8 +450,7 @@ function SnoozeMenuButton(props: {
             key={preset.id}
             onClick={(event) => {
               event.stopPropagation();
-              const picked = pickSnoozePreset(presets, preset.id, timestampFormat, environmentId);
-              if (picked) onSnooze(picked);
+              pick(preset.id);
             }}
           >
             {preset.label}
@@ -418,6 +458,8 @@ function SnoozeMenuButton(props: {
           </MenuItem>
         ))}
         {presets.length > 0 ? <MenuSeparator /> : null}
+        {drillDown.map(renderNode)}
+        <MenuSeparator />
         <MenuItem
           onClick={async (event) => {
             event.stopPropagation();

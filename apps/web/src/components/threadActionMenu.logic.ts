@@ -1,5 +1,5 @@
 import type { ContextMenuItem } from "@t3tools/contracts";
-import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled";
+import type { SnoozeMenuNode, SnoozePreset } from "@t3tools/client-runtime/state/thread-settled";
 
 export type ThreadActionMenuId =
   | "find"
@@ -91,10 +91,35 @@ export interface ThreadActionMenuState {
     readonly titleRegeneration: boolean;
   };
   readonly snoozePresets: ReadonlyArray<SnoozePreset>;
+  readonly snoozeMenu: ReadonlyArray<SnoozeMenuNode>;
   /** Guest links need their own grant, so the caller checks it instead of `canOperate`. */
   readonly canShareWithGuest?: boolean;
   /** A No project thread with its own folder, on a server that can promote it. */
   readonly canTurnIntoProject?: boolean;
+}
+
+/** The snooze submenu: flat presets, the "In" and "Next week" drill-downs, then Custom. */
+export function buildSnoozeMenuChildren(
+  presets: ReadonlyArray<SnoozePreset>,
+  drillDown: ReadonlyArray<SnoozeMenuNode>,
+): Array<ContextMenuItem<`snooze:${string}`>> {
+  const toItem = (node: SnoozeMenuNode): ContextMenuItem<`snooze:${string}`> => ({
+    id: `snooze:${node.id}`,
+    label: node.label,
+    ...(node.children ? { children: node.children.map(toItem) } : {}),
+  });
+  return [
+    ...presets.map((preset) => ({
+      id: `snooze:${preset.id}` as const,
+      label: preset.label,
+      detail: preset.whenLabel,
+    })),
+    ...drillDown.map((node, index) => ({
+      ...toItem(node),
+      separatorBefore: index === 0 && presets.length > 0,
+    })),
+    { id: "snooze:custom", label: "Custom…", separatorBefore: true },
+  ];
 }
 
 /** Local navigation, read markers, and copying remain available to read-only clients. */
@@ -152,18 +177,7 @@ export function buildThreadActionMenuItems(
                 label: "Snooze",
                 icon: "clock",
                 disabled: !state.canSnoozeNow,
-                children: [
-                  ...state.snoozePresets.map((preset) => ({
-                    id: `snooze:${preset.id}` as const,
-                    label: preset.label,
-                    detail: preset.whenLabel,
-                  })),
-                  {
-                    id: "snooze:custom" as const,
-                    label: "Custom…",
-                    separatorBefore: state.snoozePresets.length > 0,
-                  },
-                ],
+                children: buildSnoozeMenuChildren(state.snoozePresets, state.snoozeMenu),
               },
         ]
       : []),

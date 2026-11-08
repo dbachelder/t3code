@@ -27,7 +27,12 @@ import {
 } from "@t3tools/client-runtime/state/models";
 import { AuthOrchestrationOperateScope, type EnvironmentMachineKind } from "@t3tools/contracts";
 import type { SnoozePresetSetting } from "@t3tools/contracts/settings";
-import { canSnooze } from "@t3tools/client-runtime/state/thread-settled";
+import {
+  canSnooze,
+  localSnoozeDate,
+  snoozeDrillDownMenu,
+  type SnoozeMenuNode,
+} from "@t3tools/client-runtime/state/thread-settled";
 import { threadChipCopyTarget } from "@t3tools/client-runtime/thread-reference";
 import type { MenuAction } from "@react-native-menu/menu";
 import { memo, useCallback, useMemo, useState, type ComponentProps } from "react";
@@ -850,6 +855,20 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     now: props.snoozePresetMinute || snoozeGateNow,
     presets: props.snoozePresets,
   });
+  // The drill-down only changes with the date, so it rebuilds daily, not with the presets' minute.
+  const snoozeMenuDay =
+    swipeActions.secondary === "snooze"
+      ? localSnoozeDate(new Date(props.snoozePresetMinute || snoozeGateNow))
+      : null;
+  const snoozeDrillDownActions = useMemo<MenuAction[]>(() => {
+    if (snoozeMenuDay === null) return [];
+    const toAction = (node: SnoozeMenuNode): MenuAction => ({
+      id: `snooze:${node.id}`,
+      title: node.label,
+      ...(node.children ? { subactions: node.children.map(toAction) } : {}),
+    });
+    return snoozeDrillDownMenu(new Date(`${snoozeMenuDay}T00:00:00`)).map(toAction);
+  }, [snoozeMenuDay]);
   const snoozePresetActions = useMemo<MenuAction[]>(
     () => [
       ...snoozePresets.map((preset) => ({
@@ -857,9 +876,10 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         title: preset.label,
         subtitle: preset.whenLabel,
       })),
+      ...snoozeDrillDownActions,
       { id: "snooze:custom", title: "Custom…" },
     ],
-    [snoozePresets],
+    [snoozePresets, snoozeDrillDownActions],
   );
   const reorderMenuItems = useMemo<MenuAction[]>(
     () =>

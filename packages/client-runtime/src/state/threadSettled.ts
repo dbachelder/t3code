@@ -339,6 +339,8 @@ export function pickSnoozePreset(input: {
   readonly presets?: ReadonlyArray<SnoozePresetSetting>;
   readonly formatTime?: (date: Date) => string;
 }): SnoozePreset | undefined {
+  const drillDown = pickSnoozeMenuChoice(input.id, input.now);
+  if (drillDown !== null) return drillDown;
   const original = input.shown.find((preset) => preset.id === input.id);
   const ahead =
     original && Date.parse(original.snoozedUntil) > input.now.getTime() ? original : undefined;
@@ -346,6 +348,100 @@ export function pickSnoozePreset(input: {
     (candidate) => candidate.kind === "after" && snoozePresetId(candidate) === input.id,
   );
   return (setting && resolveSnoozePreset(setting, input.now, input.formatTime)) ?? ahead;
+}
+
+/** A drill-down snooze menu entry: a group when it has children, otherwise a pickable id. */
+export interface SnoozeMenuNode {
+  readonly id: string;
+  readonly label: string;
+  readonly children?: ReadonlyArray<SnoozeMenuNode>;
+}
+
+const SNOOZE_MENU_HOURS = 24;
+const SNOOZE_MENU_DAYS = 14;
+
+function oneTo(count: number): ReadonlyArray<number> {
+  return Array.from({ length: count }, (_, index) => index + 1);
+}
+
+/**
+ * "In → Hours/Days → n" and "Next week → Mon–Fri → hour". Next-week ids carry the shown
+ * wake time, so a pick after midnight still lands on the day the menu showed.
+ */
+export function snoozeDrillDownMenu(
+  now: Date,
+  formatTime: (date: Date) => string = snoozeTimeOfDayLabel,
+): ReadonlyArray<SnoozeMenuNode> {
+  const nextMonday = addSnoozeDays(now, (WEEKDAY_INDEX.monday - now.getDay() + 7) % 7 || 7);
+  return [
+    {
+      id: "in",
+      label: "In",
+      children: [
+        {
+          id: "in:hours",
+          label: "Hours",
+          children: oneTo(SNOOZE_MENU_HOURS).map((hours) => ({
+            id: `in:hours:${hours}`,
+            label: pluralize(hours, "hour"),
+          })),
+        },
+        {
+          id: "in:days",
+          label: "Days",
+          children: oneTo(SNOOZE_MENU_DAYS).map((days) => ({
+            id: `in:days:${days}`,
+            label: pluralize(days, "day"),
+          })),
+        },
+      ],
+    },
+    {
+      id: "next-week",
+      label: "Next week",
+      children: [0, 1, 2, 3, 4].map((offset) => {
+        const day = addSnoozeDays(nextMonday, offset);
+        return {
+          id: `next-week:${localSnoozeDate(day)}`,
+          label: day.toLocaleDateString(undefined, {
+            weekday: "long",
+            month: "short",
+            day: "numeric",
+          }),
+          children: Array.from({ length: 24 }, (_, hour) => {
+            const wake = new Date(day);
+            wake.setHours(hour, 0, 0, 0);
+            return { id: `until:${wake.toISOString()}`, label: formatTime(wake) };
+          }),
+        };
+      }),
+    },
+  ];
+}
+
+/** A drill-down pick; null when the id is not a drill-down choice, undefined once it has passed. */
+function pickSnoozeMenuChoice(id: string, now: Date): SnoozePreset | null | undefined {
+  const duration = /^in:(hours|days):(\d+)$/.exec(id);
+  let wake: Date;
+  if (duration) {
+    const amount = Number(duration[2]);
+    wake =
+      duration[1] === "hours"
+        ? DateTime.toDate(DateTime.makeUnsafe(now.getTime() + amount * HOUR_MS))
+        : addSnoozeDays(now, amount);
+  } else if (id.startsWith("until:")) {
+    wake = DateTime.toDate(DateTime.makeUnsafe(Date.parse(id.slice("until:".length))));
+    if (!(wake.getTime() > now.getTime())) return undefined;
+  } else {
+    return null;
+  }
+  const snoozedUntil = wake.toISOString();
+  return {
+    id,
+    label: "Snooze",
+    whenLabel: snoozeWakeLabel(snoozedUntil, { now: now.toISOString() }),
+    snoozedUntil,
+  };
 }
 
 export function snoozeWakeLabel(snoozedUntil: string, options: { readonly now: string }): string {

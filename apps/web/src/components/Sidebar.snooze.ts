@@ -3,7 +3,9 @@ import type { TimestampFormat } from "@t3tools/contracts/settings";
 import {
   pickSnoozePreset as pickSharedSnoozePreset,
   resolveSnoozePresets as resolveSharedSnoozePresets,
+  snoozeDrillDownMenu,
   snoozeWakeLabel,
+  type SnoozeMenuNode,
   type SnoozePreset,
 } from "@t3tools/client-runtime/state/thread-settled";
 
@@ -21,6 +23,15 @@ export function resolveSnoozePresets(
   environmentId: EnvironmentId,
 ): ReadonlyArray<SnoozePreset> {
   return resolveSharedSnoozePresets(now, snoozeOptions(timestampFormat, environmentId));
+}
+
+export function resolveSnoozeDrillDown(
+  now: Date,
+  timestampFormat: TimestampFormat,
+): ReadonlyArray<SnoozeMenuNode> {
+  return snoozeDrillDownMenu(now, (date) =>
+    formatShortTimestamp(date.toISOString(), timestampFormat),
+  );
 }
 
 /** A shown menu choice as picked; see the shared `pickSnoozePreset`. */
