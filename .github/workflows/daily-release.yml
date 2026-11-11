@@ -337,7 +337,15 @@ jobs:
           cd assets
           sha256sum t3-* > SHA256SUMS
           ls -l
+          # Our line goes last: the in-app updater shows any text before upstream's highlights instead of them.
+          {
+            # Missing upstream notes must not block the release.
+            gh release view "$TAG" -R "${UPSTREAM#https://github.com/}" --json body -q .body || true
+            echo
+            echo
+            echo "Upstream [$TAG]($UPSTREAM/releases/tag/$TAG) with the [daily](https://github.com/$GITHUB_REPOSITORY/commits/daily) branch's patches."
+          } > ../notes.md
           gh release create "$TAG" -R "$GITHUB_REPOSITORY" --target fork-ci --prerelease \
             --title "$TAG (daily)" \
-            --notes "Upstream [$TAG]($UPSTREAM/releases/tag/$TAG) with the [daily](https://github.com/$GITHUB_REPOSITORY/commits/daily) branch's patches." \
+            --notes-file ../notes.md \
             ./*
