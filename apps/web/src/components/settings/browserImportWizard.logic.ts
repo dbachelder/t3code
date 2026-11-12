@@ -1,7 +1,7 @@
 import { msg } from "gt-react";
 
 import { m, type MessageResolver } from "../../i18n/messages";
-import type { BrowserImportFailureReason, BrowserImportSource } from "@t3tools/contracts";
+import { BrowserImportFailureReason, type BrowserImportSource } from "@t3tools/contracts";
 
 export interface WizardTargetProfile {
   readonly id: string;
@@ -164,4 +164,60 @@ export function formatSkippedDomains(
       count: domains.length - 3,
     }),
   );
+}
+
+export const importFailureReason = (cause: unknown): BrowserImportFailureReason => {
+  const message = String((cause as { message?: unknown } | undefined)?.message ?? "");
+  return (
+    BrowserImportFailureReason.literals.find((reason) => message.includes(`failed: ${reason}.`)) ??
+    "readFailed"
+  );
+};
+
+/**
+ * The desktop's refusal when the machine's managed policy forbids cookie import. IPC wraps the
+ * message in its own prefixes, so the sentence is matched on the contract's wording.
+ */
+export const importPolicyRefusal = (cause: unknown): string | undefined => {
+  const message = String((cause as { message?: unknown } | undefined)?.message ?? "");
+  return (
+    /The managed policy at .* importing browser cookies is not allowed\./u.exec(message)?.[0] ??
+    /(?:^|: )([^:]*'s policy does not allow importing browser cookies\.)/u.exec(message)?.[1]
+  );
+};
+
+export const isImportableSource = (source: BrowserImportSource): boolean =>
+  source.unavailable !== "notInstalled" && source.unavailable !== "unsupportedPlatform";
+
+export interface CookieImportChoice {
+  readonly key: string;
+  readonly label: string;
+  readonly source: BrowserImportSource;
+  /** Absent when the source is blocked, such as while the browser is running. */
+  readonly sourceProfileDirectory?: string;
+}
+
+/** One choice per source profile, so a single click imports without the wizard. */
+export function cookieImportChoices(
+  sources: ReadonlyArray<BrowserImportSource>,
+): ReadonlyArray<CookieImportChoice> {
+  return sources.filter(isImportableSource).flatMap((source): ReadonlyArray<CookieImportChoice> => {
+    if (source.profiles.length <= 1) {
+      const directory = source.profiles[0]?.directory;
+      return [
+        {
+          key: source.id,
+          label: source.name,
+          source,
+          ...(directory === undefined ? {} : { sourceProfileDirectory: directory }),
+        },
+      ];
+    }
+    return source.profiles.map((profile) => ({
+      key: `${source.id}:${profile.directory}`,
+      label: `${source.name} · ${profile.name}`,
+      source,
+      sourceProfileDirectory: profile.directory,
+    }));
+  });
 }

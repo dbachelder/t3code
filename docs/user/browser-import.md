@@ -4,11 +4,17 @@ Import cookies from another browser into the desktop app's [preview browser](./b
 
 ## Import a profile
 
-1. Close the source browser.
+1. On macOS and Linux, Chrome-based browsers and Safari can stay open; close Firefox and Zen first, and every browser on Windows.
 2. Open **Settings → Browser → Browser profiles → Add profile** and choose a browser under **Import from**.
 3. Allow any OS keyring unlock prompt.
 
+A sign-in from the last minute may not be saved to disk by the source browser yet.
+
 This is a one-time copy—later login changes stay separate, and some sites may still require signing in again.
+
+## Import into a tab's profile
+
+Open the browser tab's **⋯** menu, choose **Import cookies from**, then a browser profile. The page reloads with the imported sessions.
 
 ## Platform notes
 

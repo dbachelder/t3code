@@ -6,7 +6,6 @@ import { ScopedSwitch } from "./ScopedSwitch";
 import { DeviceSourcesSettings } from "./DeviceSourcesSettings";
 import {
   AuthSettingsWriteScope,
-  BrowserImportFailureReason,
   BROWSER_PROFILE_MAX_COUNT,
   type BrowserLinkTarget,
   type BrowserProfile,
@@ -119,7 +118,12 @@ import { AdvancedSettings } from "./AdvancedSettings";
 import { commitNumberFieldOnEnter } from "./commitNumberFieldOnEnter";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { BrowserImportWizard, type WizardTarget } from "./BrowserImportWizard";
-import type { ImportOutcome } from "./browserImportWizard.logic";
+import {
+  importFailureReason,
+  importPolicyRefusal,
+  isImportableSource,
+  type ImportOutcome,
+} from "./browserImportWizard.logic";
 import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 const FILL_VALUE = "fill";
@@ -188,26 +192,6 @@ class ProfileLimitReachedError extends Schema.TaggedError<ProfileLimitReachedErr
 }
 
 const isProfileLimitReachedError = Schema.is(ProfileLimitReachedError);
-
-export const importFailureReason = (cause: unknown): BrowserImportFailureReason => {
-  const message = String((cause as { message?: unknown } | undefined)?.message ?? "");
-  return (
-    BrowserImportFailureReason.literals.find((reason) => message.includes(`failed: ${reason}.`)) ??
-    "readFailed"
-  );
-};
-
-/**
- * The desktop's refusal when the machine's managed policy forbids cookie import. IPC wraps the
- * message in its own prefixes, so the sentence is matched on the contract's wording.
- */
-export const importPolicyRefusal = (cause: unknown): string | undefined => {
-  const message = String((cause as { message?: unknown } | undefined)?.message ?? "");
-  return (
-    /The managed policy at .* importing browser cookies is not allowed\./u.exec(message)?.[0] ??
-    /(?:^|: )([^:]*'s policy does not allow importing browser cookies\.)/u.exec(message)?.[1]
-  );
-};
 
 async function importBrowserCookiesIntoTarget(
   bridge: NonNullable<typeof previewBridge>,
@@ -1333,10 +1317,7 @@ function BrowserProfilesSetting({ disabled }: { readonly disabled: boolean }) {
     setProfilePendingRemoval(null);
   };
 
-  const importableSources = (sources ?? []).filter(
-    (source) =>
-      source.unavailable !== "notInstalled" && source.unavailable !== "unsupportedPlatform",
-  );
+  const importableSources = (sources ?? []).filter(isImportableSource);
 
   const loadSources = () => {
     if (!previewBridge) return;

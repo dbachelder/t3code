@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
@@ -43,7 +44,21 @@ export const cookieScope = (
 
 export const bareHost = (host: string): string => (host.startsWith(".") ? host.slice(1) : host);
 
-/** Copy before reading to avoid live WAL writes and never open the source browser database for writing. */
+class CookieDatabaseCopyTornError extends Schema.TaggedError<CookieDatabaseCopyTornError>()(
+  "CookieDatabaseCopyTornError",
+  { cookiePath: Schema.String },
+) {
+  override get message(): string {
+    return `The copy of ${this.cookiePath} changed while it was copied.`;
+  }
+}
+
+const SQLITE_SIDECARS = ["-wal", "-journal"] as const;
+
+/**
+ * Copy the files instead of opening the source: a SQLite lock on a running browser's jar can make
+ * its own cookie writes fail. A copy torn by a concurrent write fails the integrity check and retries.
+ */
 export const snapshotCookieDatabase = Effect.fn("CookieDatabase.snapshotCookieDatabase")(function* (
   cookiePath: string,
   tempPrefix = "t3code-cookie-import-",
@@ -52,9 +67,23 @@ export const snapshotCookieDatabase = Effect.fn("CookieDatabase.snapshotCookieDa
   const path = yield* Path.Path;
   const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: tempPrefix });
   const target = path.join(directory, path.basename(cookiePath));
-  yield* Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-    yield* sql`VACUUM INTO ${target}`;
-  }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: cookiePath, readonly: true })));
+  const copyOnce = Effect.gen(function* () {
+    yield* fileSystem.copyFile(cookiePath, target);
+    for (const suffix of SQLITE_SIDECARS) {
+      yield* fileSystem.remove(`${target}${suffix}`, { force: true });
+      if (yield* fileSystem.exists(`${cookiePath}${suffix}`)) {
+        yield* fileSystem.copyFile(`${cookiePath}${suffix}`, `${target}${suffix}`);
+      }
+    }
+    // Read-write, so SQLite can replay a copied WAL or roll back a copied hot journal.
+    const rows = yield* Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      return yield* sql<{ readonly quick_check: string }>`PRAGMA quick_check`;
+    }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: target })));
+    if (rows[0]?.quick_check !== "ok") {
+      return yield* new CookieDatabaseCopyTornError({ cookiePath });
+    }
+  });
+  yield* copyOnce.pipe(Effect.retry({ times: 2 }));
   return target;
 });
