@@ -16,10 +16,12 @@ import {
   DesktopPreviewSetCaptureDrawnInputSchema,
   DesktopPreviewSetColorSchemeInputSchema,
   DesktopPreviewSetZoomFactorInputSchema,
+  BrowserCookieReadResult,
   BrowserImportResult,
   BrowserImportSource,
   DesktopPreviewClearDataInputSchema,
   DesktopPreviewImportCookiesInputSchema,
+  DesktopPreviewReadCookiesInputSchema,
   DesktopPreviewCreateTabInputSchema,
   DesktopPreviewTabInputSchema,
   DesktopPreviewTunnelAccessResolutionInputSchema,
@@ -457,6 +459,16 @@ export const importBrowserCookies = DesktopIpc.makeIpcMethod({
       persistent,
       ...(namespace === undefined ? {} : { namespace }),
     });
+  }),
+});
+
+export const readBrowserCookies = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.PREVIEW_READ_COOKIES_CHANNEL,
+  payload: DesktopPreviewReadCookiesInputSchema,
+  result: BrowserCookieReadResult,
+  handler: Effect.fn("desktop.ipc.preview.readBrowserCookies")(function* (input) {
+    const browserImport = yield* BrowserImport.BrowserImport;
+    return yield* browserImport.readCookies(input);
   }),
 });
 

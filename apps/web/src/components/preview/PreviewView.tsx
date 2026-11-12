@@ -231,6 +231,9 @@ export function PreviewView({
   const serverBrowser = useEnvironmentSupportsServerBrowser(threadRef.environmentId);
   const desktopLoadsLoopback = useDesktopLoadsLoopback(threadRef.environmentId);
   const adjust = useAtomCommand(previewEnvironment.adjust, "preview appearance or zoom");
+  const importServerCookies = useAtomCommand(previewEnvironment.importCookies, {
+    reportFailure: false,
+  });
 
   usePreviewSession(threadRef);
 
@@ -588,40 +591,60 @@ export function PreviewView({
   const handleImportCookies = async (
     choice: NonNullable<typeof importChoices>[number],
   ): Promise<void> => {
-    if (!previewBridge) return;
+    if (!previewBridge || !tabId) return;
+    const bridge = previewBridge;
     const failed = (description: string) =>
       toastManager.add({
         type: "error",
-        title: `Couldn't import cookies from ${choice.source.name}`,
+        title: gt("Couldn't import cookies from {browser}", { browser: choice.source.name }),
         description,
       });
     if (choice.sourceProfileDirectory === undefined) {
       failed(BROWSER_IMPORT_FAILURE_COPY[choice.source.unavailable ?? "unknownSourceProfile"]);
       return;
     }
-    try {
-      const result = await previewBridge.importBrowserCookies({
+    const source = {
+      sourceId: choice.source.id,
+      sourceProfileDirectory: choice.sourceProfileDirectory,
+    };
+    // Server tabs keep cookies in the environment's browser, which reloads the tab itself.
+    const importIntoServerTab = async () => {
+      const read = await bridge.readBrowserCookies(source);
+      const outcome = await importServerCookies({
         environmentId: threadRef.environmentId,
-        sourceId: choice.source.id,
-        sourceProfileDirectory: choice.sourceProfileDirectory,
-        targetProfileId: activeProfileId,
+        input: { threadId: threadRef.threadId, tabId, cookies: read.cookies },
       });
+      if (outcome._tag === "Success") return outcome.value;
+      const error = squashAtomCommandFailure(outcome);
+      failed(error instanceof Error ? error.message : gt("An error occurred."));
+      return null;
+    };
+    try {
+      const result = serverOwnsRendering
+        ? await importIntoServerTab()
+        : await bridge.importBrowserCookies({
+            environmentId: threadRef.environmentId,
+            ...source,
+            targetProfileId: activeProfileId,
+          });
+      if (result === null) return;
       toastManager.add({
         type: "success",
-        title: `Imported ${result.imported} cookies from ${choice.label}`,
-        description: `Into ${activeProfileName}. Reloading the page.`,
+        title: gt(
+          "{count, plural, one {Imported {count} cookie from {browser}} other {Imported {count} cookies from {browser}}}",
+          { count: result.imported, browser: choice.label },
+        ),
+        description: gt("Into {profile}. Reloading the page.", { profile: activeProfileName }),
       });
-      if (runtimeTabId) void previewBridge.refresh(runtimeTabId);
+      if (!serverOwnsRendering && runtimeTabId) void bridge.refresh(runtimeTabId);
     } catch (cause) {
       failed(importPolicyRefusal(cause) ?? BROWSER_IMPORT_FAILURE_COPY[importFailureReason(cause)]);
     }
   };
 
-  // Server tabs keep cookies on the server, and a removed profile must not regain cookies.
+  // The desktop reads the source browser; a removed profile must not regain cookies.
   const cookieImport: PreviewCookieImport | undefined =
-    previewBridge &&
-    !serverOwnsRendering &&
-    browserDefaults.profiles.some((profile) => profile.id === activeProfileId)
+    previewBridge && browserDefaults.profiles.some((profile) => profile.id === activeProfileId)
       ? {
           choices: importChoices,
           ...(cookieImportDenial === undefined ? {} : { denial: cookieImportDenial }),
