@@ -2,6 +2,63 @@
 
 Upstream [T3 Code](https://github.com/pingdotgg/t3code) nightlies with a few local patches.
 
+## What's different from upstream
+
+The patches live on the `daily` branch. List them with
+`git log --oneline upstream/main..daily`.
+
+### Drill-down snooze menu
+
+The snooze menu on a sidebar row, and **Snooze** in a thread's menu, gain two submenus below
+your presets:
+
+- **In → Hours → 1 to 24 hours**, or **In → Days → 1 to 14 days**
+- **Next week → Monday to Friday → any hour**, for example *Next week → Wednesday, Nov 18 → 2:00 PM*
+
+A next-week choice remembers the exact time the menu showed, so picking it just after midnight
+still snoozes to the day you saw. **Custom…** stays at the bottom.
+
+![Snooze menu open at Next week → Wednesday, Nov 18, listing every hour of the day](docs/snooze-menu.png)
+
+### Import cookies from a browser tab's menu (desktop)
+
+Upstream imports cookies only when you create a new browser profile, and you must quit the
+source browser first. Here, any browser tab can import into the profile it already uses:
+
+**⋯ → Import cookies from → Chrome · Default**: the cookies are copied into the tab's profile
+and the page reloads, already signed in.
+
+- Chrome-based browsers and Safari can stay open on macOS and Linux. The import reads a copy of
+  their cookie database, not the live file. Firefox, Zen and every browser on Windows still have to
+  be closed.
+- It also works for tabs the server runs. The desktop app decrypts the source browser's cookies,
+  then the server loads them into that tab's browser through a new `preview.importCookies` call.
+- The **Add profile** flow in **Settings → Browser** uses the same no-quit import.
+
+### T3 Connect works when `--host` names a specific address
+
+Binding the server to one address, such as a Tailscale IP:
+
+```sh
+t3 serve --host 100.64.0.10
+```
+
+made the server register that address as its origin with the T3 Connect relay. The relay accepts
+only loopback origins, so it answered 401, which the server misread as "link revoked" (starting with upstream
+0.1.10-nightly.20261112). This build registers `127.0.0.1` (or `[::1]`) instead; put a
+loopback forwarder in front of the server if nothing listens there. A host already marked
+revoked recovers on its own once it starts this build; don't re-link it.
+
+### macOS builds without an Apple team
+
+When `T3CODE_APPLE_TEAM_ID` is unset, `scripts/build-desktop-artifact.ts` signs the app with
+whichever certificate electron-builder finds, and uses the runtime entitlements without the
+passkey ones (those need an Apple team and a provisioning profile). That is how this repository
+signs its releases with a self-signed certificate. As a result, passkey sign-in in the built-in
+browser is not available in this build.
+
+## How releases are built
+
 - `daily`: the patches, on top of an upstream nightly tag.
 - `fork-ci` (default branch): `.github/workflows/daily-release.yml`. Every 4 hours it takes the
   newest upstream nightly tag, cherry-picks `daily` onto it, builds the macOS arm64 app, the
