@@ -9,6 +9,8 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import {
   AuthOrchestrationOperateScope,
+  BROWSER_IMPORT_FAILURE_COPY,
+  type BrowserImportSource,
   DEFAULT_BROWSER_PROFILE_ID,
   INCOGNITO_BROWSER_PROFILE_ID,
   FILL_PREVIEW_VIEWPORT,
@@ -17,6 +19,7 @@ import {
   DEFAULT_PREVIEW_ZOOM_FACTOR,
   PREVIEW_ZOOM_LEVELS,
   type PreviewAdjustInput,
+  managedCapabilityDenial,
 } from "@t3tools/contracts";
 import {
   normalizePreviewUrl,
@@ -71,7 +74,17 @@ import { openPreviewSession } from "./openPreviewSession";
 import { showPreviewPopup } from "./showPreviewPopup";
 import { PreviewChromeRow } from "./PreviewChromeRow";
 import { PreviewEmptyState } from "./PreviewEmptyState";
-import { PreviewMoreMenu, type PreviewMoreMenuActions } from "./PreviewMoreMenu";
+import {
+  PreviewMoreMenu,
+  type PreviewCookieImport,
+  type PreviewMoreMenuActions,
+} from "./PreviewMoreMenu";
+import {
+  cookieImportChoices,
+  importFailureReason,
+  importPolicyRefusal,
+} from "~/components/settings/browserImportWizard.logic";
+import { usePrimaryManagedPolicy } from "~/state/managedPolicy";
 import { commitBrowserViewportChange } from "~/browser/browserViewportActions";
 import { browserResponsiveViewportForToggle, useBrowserDefaults } from "~/browser/browserDefaults";
 import { BrowserDeviceToolbar } from "~/browser/BrowserDeviceToolbar";
@@ -527,6 +540,67 @@ export function PreviewView({
           ...(canFindInPage ? { find: handleFind } : {}),
         }
       : null;
+
+  const [importSources, setImportSources] = useState<ReadonlyArray<BrowserImportSource> | null>(
+    null,
+  );
+  const cookieImportDenial = managedCapabilityDenial(
+    usePrimaryManagedPolicy(),
+    "browserCookieImport",
+  );
+  const importChoices = importSources === null ? null : cookieImportChoices(importSources);
+  const handleImportCookies = async (
+    choice: NonNullable<typeof importChoices>[number],
+  ): Promise<void> => {
+    if (!previewBridge) return;
+    const failed = (description: string) =>
+      toastManager.add({
+        type: "error",
+        title: `Couldn't import cookies from ${choice.source.name}`,
+        description,
+      });
+    if (choice.sourceProfileDirectory === undefined) {
+      failed(BROWSER_IMPORT_FAILURE_COPY[choice.source.unavailable ?? "unknownSourceProfile"]);
+      return;
+    }
+    try {
+      const result = await previewBridge.importBrowserCookies({
+        environmentId: threadRef.environmentId,
+        sourceId: choice.source.id,
+        sourceProfileDirectory: choice.sourceProfileDirectory,
+        targetProfileId: activeProfileId,
+      });
+      toastManager.add({
+        type: "success",
+        title: `Imported ${result.imported} cookies from ${choice.label}`,
+        description: `Into ${activeProfileName}. Reloading the page.`,
+      });
+      if (runtimeTabId) void previewBridge.refresh(runtimeTabId);
+    } catch (cause) {
+      failed(importPolicyRefusal(cause) ?? BROWSER_IMPORT_FAILURE_COPY[importFailureReason(cause)]);
+    }
+  };
+
+  // Server tabs keep cookies on the server, and a removed profile must not regain cookies.
+  const cookieImport: PreviewCookieImport | undefined =
+    previewBridge &&
+    !serverOwnsRendering &&
+    browserDefaults.profiles.some((profile) => profile.id === activeProfileId)
+      ? {
+          choices: importChoices,
+          ...(cookieImportDenial === undefined ? {} : { denial: cookieImportDenial }),
+          onOpen: () => {
+            void previewBridge
+              ?.listBrowserImportSources()
+              .then(setImportSources)
+              .catch(() => setImportSources((previous) => previous ?? []));
+          },
+          onImport: (key) => {
+            const choice = importChoices?.find((candidate) => candidate.key === key);
+            if (choice) void handleImportCookies(choice);
+          },
+        }
+      : undefined;
 
   const handleNativePictureInPicture = () => {
     if (!previewBridge || !runtimeTabId) return;
@@ -1017,6 +1091,7 @@ export function PreviewView({
                 ? { move: { label: moveLabel, onMove: () => void handleMoveTab() } }
                 : {})}
               profileName={activeProfileName}
+              {...(cookieImport ? { cookieImport } : {})}
               findShortcutLabel={shortcutLabelForCommand(keybindings, "preview.find", {
                 context: { previewFocus: true },
               })}

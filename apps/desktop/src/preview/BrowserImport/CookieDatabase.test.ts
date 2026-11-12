@@ -14,7 +14,7 @@ const runNode = <A, E>(
 ) => effect.pipe(Effect.provide(NodeServices.layer), Effect.scoped);
 
 describe("snapshotCookieDatabase", () => {
-  it.effect("includes committed WAL data in one consistent database", () =>
+  it.effect("includes committed WAL data while the browser holds an exclusive lock", () =>
     runNode(
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
@@ -25,6 +25,8 @@ describe("snapshotCookieDatabase", () => {
         const source = path.join(sourceDirectory, "Cookies");
         const snapshot = yield* Effect.gen(function* () {
           const sql = yield* SqlClient.SqlClient;
+          // Chromium may hold its jar this way; a SQLite reader then gets SQLITE_BUSY.
+          yield* sql`PRAGMA locking_mode = EXCLUSIVE`;
           yield* sql`PRAGMA journal_mode = WAL`;
           yield* sql`PRAGMA wal_autocheckpoint = 0`;
           yield* sql`CREATE TABLE cookies(name TEXT NOT NULL)`;

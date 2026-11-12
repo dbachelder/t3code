@@ -41,6 +41,15 @@ export interface PreviewMoreMenuActions {
   readonly find?: () => void;
 }
 
+export interface PreviewCookieImport {
+  /** Null while the browser list loads. */
+  readonly choices: ReadonlyArray<{ readonly key: string; readonly label: string }> | null;
+  /** Set when an administrator's policy forbids importing. */
+  readonly denial?: string;
+  readonly onOpen: () => void;
+  readonly onImport: (key: string) => void;
+}
+
 interface Props {
   enabled: boolean;
   actions: PreviewMoreMenuActions;
@@ -52,6 +61,7 @@ interface Props {
   profileName: string | undefined;
   findShortcutLabel?: string | null;
   move?: { readonly label: string; readonly onMove: () => void };
+  cookieImport?: PreviewCookieImport;
 }
 
 const MenuTriggerButton = () => (
@@ -80,6 +90,7 @@ export function PreviewMoreMenu({
   profileName,
   findShortcutLabel,
   move,
+  cookieImport,
 }: Props) {
   const zoomLabel = `${Math.round(zoomFactor * 100)}%`;
   const disabled = !enabled;
@@ -177,6 +188,26 @@ export function PreviewMoreMenu({
             <MenuGroupLabel className="max-w-64">
               <span className="block truncate">Profile: {profileName}</span>
             </MenuGroupLabel>
+          ) : null}
+          {cookieImport ? (
+            <MenuSub onOpenChange={(open) => open && cookieImport.onOpen()}>
+              <MenuSubTrigger>Import cookies from</MenuSubTrigger>
+              <MenuSubPopup>
+                {cookieImport.denial !== undefined ? (
+                  <MenuItem disabled>{cookieImport.denial}</MenuItem>
+                ) : cookieImport.choices === null ? (
+                  <MenuItem disabled>Looking for browsers…</MenuItem>
+                ) : cookieImport.choices.length === 0 ? (
+                  <MenuItem disabled>No supported browsers found</MenuItem>
+                ) : (
+                  cookieImport.choices.map((choice) => (
+                    <MenuItem key={choice.key} onClick={() => cookieImport.onImport(choice.key)}>
+                      {choice.label}
+                    </MenuItem>
+                  ))
+                )}
+              </MenuSubPopup>
+            </MenuSub>
           ) : null}
           <MenuItem onClick={actions.clearCookies}>Clear cookies</MenuItem>
           <MenuItem onClick={actions.clearCache}>Clear cache</MenuItem>

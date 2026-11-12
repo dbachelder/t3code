@@ -1,11 +1,8 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import { type EnvironmentId, managedPolicyDeniedMessage } from "@t3tools/contracts";
 
-import {
-  clearBrowserProfileData,
-  importFailureReason,
-  importPolicyRefusal,
-} from "./IntegrationsSettings";
+import { importFailureReason, importPolicyRefusal } from "./browserImportWizard.logic";
+import { clearBrowserProfileData } from "./IntegrationsSettings";
 
 const environmentId = "environment-a" as EnvironmentId;
 const secondEnvironmentId = "environment-b" as EnvironmentId;

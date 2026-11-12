@@ -4,8 +4,12 @@ The desktop app can import cookies from another browser so you can reuse its sig
 in the preview browser.
 
 Open **Settings → Browser → Browser profiles → Add profile**, then choose a browser under
-**Import from**. Close the source browser before importing, and allow an operating-system keyring
-unlock prompt if one appears.
+**Import from**. Allow an operating-system keyring unlock prompt if one appears. On macOS and Linux,
+Chrome-based browsers and Safari can stay open; close Firefox and Zen first, and every browser on
+Windows. A sign-in from the last minute may not be saved to disk by the source browser yet.
+
+To import into the profile a browser tab already uses, open the tab's **⋯** menu and choose
+**Import cookies from**, then a browser profile. The page reloads with the imported sessions.
 
 This is a one-time copy. Later login changes stay separate between the two browsers, and some
 sites may still require you to sign in again.

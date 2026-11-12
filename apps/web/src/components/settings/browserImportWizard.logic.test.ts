@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import type { BrowserImportSource } from "@t3tools/contracts";
 
 import {
+  cookieImportChoices,
   initialWizardStep,
   initialTargetSelection,
   refreshedSourceProfileDirectory,
@@ -60,5 +61,28 @@ describe("refreshedSourceProfileDirectory", () => {
   it("falls back only when the old profile vanished and clears an empty result", () => {
     expect(refreshedSourceProfileDirectory("Removed", refreshed)).toBe("Default");
     expect(refreshedSourceProfileDirectory("Removed", source({ profiles: [] }))).toBe("");
+  });
+});
+
+describe("cookieImportChoices", () => {
+  it("offers one choice per profile and keeps a blocked browser to explain why", () => {
+    const choices = cookieImportChoices([
+      source({
+        profiles: [
+          { directory: "Default", name: "Personal" },
+          { directory: "Profile 2", name: "Work" },
+        ],
+      }),
+      source({ id: "chrome", name: "Chrome", profiles: [], unavailable: "browserRunning" }),
+      source({ id: "edge", name: "Edge", profiles: [], unavailable: "notInstalled" }),
+    ]);
+
+    expect(
+      choices.map(({ key, label, sourceProfileDirectory }) => [key, label, sourceProfileDirectory]),
+    ).toEqual([
+      ["helium:Default", "Helium · Personal", "Default"],
+      ["helium:Profile 2", "Helium · Work", "Profile 2"],
+      ["chrome", "Chrome", undefined],
+    ]);
   });
 });

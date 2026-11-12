@@ -10,7 +10,6 @@ import { readManagedPolicyFile } from "@t3tools/shared/managedPolicyFile";
 import * as DesktopManagedPolicy from "../../app/DesktopManagedPolicy.ts";
 import * as BrowserImport from "./BrowserImport.ts";
 import { BROWSER_IMPORT_SOURCES, sourcePathContext } from "./Sources.ts";
-import { symlinksSupported } from "@t3tools/shared/testing/symlinks";
 
 const helium = BROWSER_IMPORT_SOURCES.find((source) => source.id === "helium")!;
 
@@ -90,31 +89,6 @@ describe("BrowserImport.importCookies", () => {
       assert.instanceOf(error, BrowserImport.BrowserImportFailedError);
       assert.equal(error.reason, "unknownSourceProfile");
     }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
-  );
-
-  it.effect.skipIf(!symlinksSupported)(
-    "refuses to import while the source browser holds its profile",
-    () =>
-      Effect.gen(function* () {
-        const fileSystem = yield* FileSystem.FileSystem;
-        const { importer, root } = yield* withImporter();
-        yield* fileSystem.symlink("host-that-does-not-exist-1234", `${root}/SingletonLock`);
-
-        const error = yield* importer
-          .importCookies({
-            input: {
-              sourceId: "helium",
-              sourceProfileDirectory: "Default",
-              targetProfileId: "default",
-            },
-            scope: "persist:t3code-preview-test",
-            persistent: true,
-          })
-          .pipe(Effect.flip);
-
-        assert.instanceOf(error, BrowserImport.BrowserImportFailedError);
-        assert.equal(error.reason, "browserRunning");
-      }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
   );
 });
 
