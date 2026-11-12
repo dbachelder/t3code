@@ -38,8 +38,11 @@ import {
   type PreviewAutomationTypeInput,
   type PreviewAutomationUploadInput,
   type PreviewAutomationWaitForInput,
+  type BrowserImportCookie,
+  type BrowserImportResult,
   PreviewClearProfileError,
   type PreviewEvent,
+  PreviewImportCookiesError,
   type PreviewNavStatus,
   type PreviewSessionSnapshot,
   type PreviewViewportSetting,
@@ -284,6 +287,12 @@ export class ServerBrowser extends Context.Service<
     }) => Effect.Effect<Option.Option<{ readonly path: string; readonly fileName: string }>>;
 
     readonly clearProfile: (profileId: string) => Effect.Effect<void, PreviewClearProfileError>;
+    /** Sets cookies in the tab's profile, then reloads the tab. */
+    readonly importCookies: (input: {
+      readonly threadId: string;
+      readonly tabId: string;
+      readonly cookies: ReadonlyArray<BrowserImportCookie>;
+    }) => Effect.Effect<BrowserImportResult, PreviewImportCookiesError>;
 
     readonly profileReporter: Effect.Effect<ProfileReporter, never, Scope.Scope>;
   }
@@ -408,6 +417,43 @@ const PAGE_CLOSE_GRACE_MS = 5_000;
 const DOWNLOAD_MAX_BYTES = 1024 * 1024 * 1024;
 
 const tabKey = (threadId: string, tabId: string) => `${threadId}\u0000${tabId}`;
+
+const CDP_SAME_SITE = { lax: "Lax", strict: "Strict", no_restriction: "None" } as const;
+
+/** One cookie per call, so a cookie Chrome rejects skips only itself. */
+export const setImportedCookies = async (
+  cdp: Pick<CDPSession, "send">,
+  cookies: ReadonlyArray<BrowserImportCookie>,
+): Promise<BrowserImportResult> => {
+  let imported = 0;
+  const skippedDomains = new Set<string>();
+  for (const cookie of cookies) {
+    const set = await cdp
+      .send("Network.setCookie", {
+        name: cookie.name,
+        value: cookie.value,
+        // CDP derives a host-only cookie from the URL; a domain makes it a domain cookie.
+        url: cookie.url,
+        ...(cookie.domain === undefined ? {} : { domain: cookie.domain }),
+        path: cookie.path,
+        secure: cookie.secure,
+        httpOnly: cookie.httpOnly,
+        ...(cookie.sameSite === "unspecified" ? {} : { sameSite: CDP_SAME_SITE[cookie.sameSite] }),
+        ...(cookie.expirationDate === undefined ? {} : { expires: cookie.expirationDate }),
+      })
+      .then(
+        () => true,
+        () => false,
+      );
+    if (set) imported += 1;
+    else skippedDomains.add(URL.parse(cookie.url)?.hostname ?? cookie.url);
+  }
+  return {
+    imported,
+    skipped: cookies.length - imported,
+    skippedDomains: [...skippedDomains].slice(0, 20),
+  };
+};
 
 const pushBounded = <A>(
   buffer: Array<A>,
@@ -3101,9 +3147,24 @@ const make = Effect.gen(function* () {
       catch: (cause) => new PreviewClearProfileError({ profileId, cause }),
     });
 
+  const importCookies: ServerBrowser["Service"]["importCookies"] = (input) =>
+    Effect.tryPromise({
+      try: async () => {
+        const tab = tabs.get(tabKey(input.threadId, input.tabId));
+        if (!tab) throw new Error(`No server tab ${input.tabId} is open.`);
+        return tab.control.system(async () => {
+          const result = await setImportedCookies(tab.cdp, input.cookies);
+          if (result.imported > 0) await tab.cdp.send("Page.reload", {});
+          return result;
+        });
+      },
+      catch: (cause) => new PreviewImportCookiesError({ tabId: input.tabId, cause }),
+    });
+
   return ServerBrowser.of({
     attachViewer,
     clearProfile,
+    importCookies,
     profileReporter,
     openDownload,
     answerFileChooser,

@@ -5,6 +5,7 @@ import { SnapShotSource } from "./chatAttachment.ts";
 import { EnvironmentId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { BrowserProfileId } from "./browserProfile.ts";
 import type {
+  BrowserCookieReadResult,
   BrowserImportResult,
   BrowserImportSource,
   BrowserImportSourceId,
@@ -1292,6 +1293,11 @@ export interface DesktopPreviewBridge {
     readonly sourceProfileDirectory: string;
     readonly targetProfileId: string;
   }) => Promise<BrowserImportResult>;
+  /** Decrypted cookies for a browser the desktop does not own, such as the server's. */
+  readBrowserCookies: (input: {
+    readonly sourceId: BrowserImportSourceId;
+    readonly sourceProfileDirectory: string;
+  }) => Promise<BrowserCookieReadResult>;
   setAnnotationTheme: (theme: DesktopPreviewAnnotationTheme) => Promise<void>;
   setAnnotationSendEnabled: (tabId: string, enabled: boolean) => Promise<void>;
   annotationVoice: {

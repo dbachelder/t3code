@@ -3338,3 +3338,47 @@ it.live("reports a desktop tab's load failure from before the server connected",
     }),
   ).pipe(Effect.provide(layer)),
 );
+
+it.effect("imports cookies one at a time so a rejected cookie skips only itself", () =>
+  Effect.gen(function* () {
+    const sent: Array<unknown> = [];
+    const cdp = {
+      send: (_method: string, params: { readonly name: string }) => {
+        sent.push(params);
+        return params.name === "rejected"
+          ? Promise.reject(new Error("Invalid cookie fields"))
+          : Promise.resolve({});
+      },
+    } as unknown as Parameters<typeof ServerBrowser.setImportedCookies>[0];
+    const base = { value: "v", path: "/", secure: true, httpOnly: false } as const;
+
+    const result = yield* Effect.promise(() =>
+      ServerBrowser.setImportedCookies(cdp, [
+        { ...base, url: "https://app.example.com/", name: "host", sameSite: "unspecified" },
+        {
+          ...base,
+          url: "https://example.com/",
+          name: "domain",
+          domain: ".example.com",
+          sameSite: "no_restriction",
+          expirationDate: 1_900_000_000,
+        },
+        { ...base, url: "https://bad.example/", name: "rejected", sameSite: "lax" },
+      ]),
+    );
+
+    expect(sent).toEqual([
+      { ...base, url: "https://app.example.com/", name: "host" },
+      {
+        ...base,
+        url: "https://example.com/",
+        name: "domain",
+        domain: ".example.com",
+        sameSite: "None",
+        expires: 1_900_000_000,
+      },
+      { ...base, url: "https://bad.example/", name: "rejected", sameSite: "Lax" },
+    ]);
+    expect(result).toEqual({ imported: 2, skipped: 1, skippedDomains: ["bad.example"] });
+  }),
+);

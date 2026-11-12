@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 import { NonNegativeInt, PositiveInt, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { BROWSER_PROFILE_MAX_COUNT, BrowserProfile, BrowserProfileId } from "./browserProfile.ts";
+import { BrowserImportCookies } from "./browserImport.ts";
 
 export const PREVIEW_URL_MAX_LENGTH = 2_048;
 export const CONFIGURED_LOCAL_SERVER_URLS_MAX_ITEMS = 32;
@@ -225,6 +226,13 @@ export const PreviewReportProfilesInput = Schema.Struct({
 });
 export type PreviewReportProfilesInput = typeof PreviewReportProfilesInput.Type;
 
+export const PreviewImportCookiesInput = Schema.Struct({
+  threadId: ThreadId,
+  tabId: PreviewTabId,
+  cookies: BrowserImportCookies,
+});
+export type PreviewImportCookiesInput = typeof PreviewImportCookiesInput.Type;
+
 export const PreviewClearProfileInput = Schema.Struct({
   profileId: BrowserProfileId,
 });
@@ -386,6 +394,15 @@ export class PreviewControlRequiredError extends Schema.TaggedError<PreviewContr
 ) {
   override get message() {
     return "Take control of the server browser and use its viewer controls.";
+  }
+}
+
+export class PreviewImportCookiesError extends Schema.TaggedError<PreviewImportCookiesError>()(
+  "PreviewImportCookiesError",
+  { tabId: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {
+  override get message() {
+    return "The environment's browser could not take the imported cookies. Reopen the tab and try again.";
   }
 }
 

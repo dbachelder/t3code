@@ -118,6 +118,10 @@ export class BrowserImport extends Context.Service<
   BrowserImport,
   {
     readonly listSources: Effect.Effect<ReadonlyArray<BrowserImportSource>>;
+    /** Decrypts without writing anywhere, for a browser this desktop does not own. */
+    readonly readCookies: (
+      input: Pick<BrowserImportInput, "sourceId" | "sourceProfileDirectory">,
+    ) => Effect.Effect<CookieReadResult, BrowserImportFailedError | BrowserImportPolicyError>;
     readonly importCookies: (input: {
       readonly input: BrowserImportInput;
       readonly scope: string;
@@ -230,19 +234,14 @@ export const make = Effect.gen(function* BrowserImportMake() {
     }),
   ).pipe(Effect.provide(platformServices));
 
-  const importCookies = Effect.fn("BrowserImport.importCookies")(function* (input: {
-    readonly input: BrowserImportInput;
-    readonly scope: string;
-    readonly persistent: boolean;
-    readonly namespace?: BrowserSession.BrowserSessionPartitionNamespace;
-  }) {
+  const readCookies = Effect.fn("BrowserImport.readCookies")(function* (
+    input: Pick<BrowserImportInput, "sourceId" | "sourceProfileDirectory">,
+  ) {
     yield* checkBrowserImportPolicy(managedPolicy.read);
-    const definition = BROWSER_IMPORT_SOURCES.find(
-      (candidate) => candidate.id === input.input.sourceId,
-    );
+    const definition = BROWSER_IMPORT_SOURCES.find((candidate) => candidate.id === input.sourceId);
     if (!definition) {
       return yield* new BrowserImportFailedError({
-        sourceId: input.input.sourceId,
+        sourceId: input.sourceId,
         reason: "unknownSource",
       });
     }
@@ -267,7 +266,7 @@ export const make = Effect.gen(function* BrowserImportMake() {
       Effect.provide(platformServices),
     );
     const requestedProfile = sourceProfiles.find(
-      (profile) => profile.directory === input.input.sourceProfileDirectory,
+      (profile) => profile.directory === input.sourceProfileDirectory,
     );
     if (requestedProfile === undefined) {
       return yield* new BrowserImportFailedError({
@@ -313,7 +312,7 @@ export const make = Effect.gen(function* BrowserImportMake() {
               platform,
             });
 
-    const result = yield* read.pipe(
+    return yield* read.pipe(
       Effect.scoped,
       Effect.provide(platformServices),
       Effect.catchTags({
@@ -331,14 +330,22 @@ export const make = Effect.gen(function* BrowserImportMake() {
           ),
       }),
     );
+  });
 
+  const importCookies = Effect.fn("BrowserImport.importCookies")(function* (input: {
+    readonly input: BrowserImportInput;
+    readonly scope: string;
+    readonly persistent: boolean;
+    readonly namespace?: BrowserSession.BrowserSessionPartitionNamespace;
+  }) {
+    const result = yield* readCookies(input.input);
     const session = yield* browserSession
       .getSession(input.scope, input.persistent, input.namespace)
       .pipe(
         Effect.mapError(
           (cause) =>
             new BrowserImportFailedError({
-              sourceId: definition.id,
+              sourceId: input.input.sourceId,
               reason: "sessionUnavailable",
               cause,
             }),
@@ -349,7 +356,7 @@ export const make = Effect.gen(function* BrowserImportMake() {
     return yield* writeCookies(session, result);
   });
 
-  return BrowserImport.of({ listSources, importCookies });
+  return BrowserImport.of({ listSources, readCookies, importCookies });
 });
 
 export const layer = Layer.effect(BrowserImport, make);

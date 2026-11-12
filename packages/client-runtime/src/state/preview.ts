@@ -63,6 +63,10 @@ export function createPreviewEnvironmentAtoms<R, E>(
       scheduler: lifecycleScheduler,
       concurrency: lifecycleConcurrency,
     }),
+    importCookies: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:preview:import-cookies",
+      tag: WS_METHODS.previewImportCookies,
+    }),
     clearProfile: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:preview:clear-profile",
       tag: WS_METHODS.previewClearProfile,
