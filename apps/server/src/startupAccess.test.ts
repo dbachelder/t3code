@@ -6,6 +6,7 @@ import * as NetAddress from "effect/net/NetAddress";
 import {
   acceptsPrivateNetworkConnection,
   loopbackUrlHostForAddress,
+  relayOriginHostForAddress,
   resolveHeadlessConnectionString,
 } from "./startupAccess.ts";
 
@@ -67,6 +68,15 @@ it("targets the bound interface when the listener binds a specific address", () 
   expect(hostFor("127.0.0.1")).toBe("127.0.0.1");
   expect(hostFor("127.0.0.2")).toBe("127.0.0.2");
   expect(hostFor("100.101.102.103")).toBe("100.101.102.103");
+});
+
+it("gives T3 Connect a loopback origin whatever address the listener binds", () => {
+  const hostFor = (ip: string) =>
+    relayOriginHostForAddress(NetAddress.inetAddressFromIpStringUnsafe(ip, 3773));
+
+  expect(hostFor("100.101.102.103")).toBe("127.0.0.1");
+  expect(hostFor("0.0.0.0")).toBe("127.0.0.1");
+  expect(hostFor("::1")).toBe("[::1]");
 });
 
 describe("acceptsPrivateNetworkConnection", () => {

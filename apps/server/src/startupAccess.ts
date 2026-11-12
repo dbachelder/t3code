@@ -75,6 +75,12 @@ export const loopbackUrlHostForAddress = (address: NetAddress.InetAddress): stri
     ? "127.0.0.1"
     : NetAddress.formatUrlHostString(NetAddress.formatIp(address.address));
 
+// The relay rejects non-loopback tunnel origins, so a specific --host still registers loopback.
+export const relayOriginHostForAddress = (address: NetAddress.InetAddress): string =>
+  address._tag === "InetAddressV6" && NetAddress.isLoopback(address.address)
+    ? "[::1]"
+    : "127.0.0.1";
+
 const normalizeHost = (host: string): string =>
   host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
 
