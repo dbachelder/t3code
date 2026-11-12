@@ -66,7 +66,7 @@ import * as ServerConfig from "../config.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as AgentAwarenessRelay from "../relay/AgentAwarenessRelay.ts";
 import { makeRelayEnvironmentClient } from "../relay/relayEnvironmentClient.ts";
-import { loopbackUrlHostForAddress } from "../startupAccess.ts";
+import { relayOriginHostForAddress } from "../startupAccess.ts";
 import {
   type CliDesiredLinkMode,
   dropRevokedCloudLink,
@@ -590,7 +590,7 @@ const make = Effect.gen(function* () {
       return yield* new CloudLinkInternalError({ operation: "resolve-server-origin" });
     }
     const { origin } = parseManagedEndpointLocalOrigin(
-      `http://${loopbackUrlHostForAddress(address)}:${address.port}`,
+      `http://${relayOriginHostForAddress(address)}:${address.port}`,
     );
     if (!isLoopbackEndpointOrigin(origin)) {
       return yield* new CloudLinkOriginInvalidError({ origin: "local" });
@@ -1195,7 +1195,7 @@ const make = Effect.gen(function* () {
           return yield* new CloudLinkInternalError({ operation: "resolve-server-origin" });
         }
         const registration = yield* registerManagedTunnelRecovery(
-          `http://${loopbackUrlHostForAddress(address)}:${address.port}`,
+          `http://${relayOriginHostForAddress(address)}:${address.port}`,
         ).pipe(
           Effect.retry({
             times: 2,
