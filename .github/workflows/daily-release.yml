@@ -12,6 +12,12 @@ on:
       tag:
         description: "Upstream nightly tag to build. Default: the newest."
         required: false
+      ref:
+        description: "Upstream branch or commit SHA to build instead of a tag, such as main. Needs version."
+        required: false
+      version:
+        description: "Version for a ref build: X.Y.Z-nightly.YYYYMMDD.N, above the installed one and no upstream tag."
+        required: false
 
 concurrency:
   group: daily-release
@@ -31,6 +37,8 @@ jobs:
     timeout-minutes: 15
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
+      ref: ${{ steps.tag.outputs.ref }}
+      upstream: ${{ steps.tag.outputs.upstream }}
       version: ${{ steps.tag.outputs.version }}
       build: ${{ steps.tag.outputs.build }}
     steps:
@@ -38,20 +46,35 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REQUESTED: ${{ inputs.tag }}
+          REQUESTED_REF: ${{ inputs.ref }}
+          REQUESTED_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          tag="${REQUESTED:-$(git ls-remote --tags --refs "$UPSTREAM" 'v*-nightly.*' | sed 's|.*refs/tags/||' | sort -V | tail -n1)}"
-          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]{8}\.[0-9]+$ ]] || { echo "Not a nightly tag: $tag" >&2; exit 1; }
+          if [[ -n "$REQUESTED_REF" ]]; then
+            # A ref build has no upstream tag, so the version is ours; the updater accepts only this shape.
+            [[ -n "$REQUESTED_VERSION" ]] || { echo "A ref build needs a version." >&2; exit 1; }
+            tag="v$REQUESTED_VERSION"
+            sha=$(git ls-remote "$UPSTREAM" "refs/heads/$REQUESTED_REF" | cut -f1)
+            [[ -n "$sha" ]] || sha="$REQUESTED_REF"
+            [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo "Not an upstream branch or full SHA: $REQUESTED_REF" >&2; exit 1; }
+            ref="$sha"
+            upstream="[\`${sha:0:10}\`]($UPSTREAM/commit/$sha)"
+          else
+            tag="${REQUESTED:-$(git ls-remote --tags --refs "$UPSTREAM" 'v*-nightly.*' | sed 's|.*refs/tags/||' | sort -V | tail -n1)}"
+            ref="refs/tags/$tag"
+            upstream="[$tag]($UPSTREAM/releases/tag/$tag)"
+          fi
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]{8}\.[0-9]+$ ]] || { echo "Not a nightly version: $tag" >&2; exit 1; }
           build=true
           if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then build=false; fi
-          echo "$tag: build=$build"
-          { echo "tag=$tag"; echo "version=${tag#v}"; echo "build=$build"; } >> "$GITHUB_OUTPUT"
+          echo "$tag ($ref): build=$build"
+          { echo "tag=$tag"; echo "ref=$ref"; echo "upstream=$upstream"; echo "version=${tag#v}"; echo "build=$build"; } >> "$GITHUB_OUTPUT"
 
       - if: steps.tag.outputs.build == 'true'
         uses: actions/checkout@v6
         with:
           repository: pingdotgg/t3code
-          ref: refs/tags/${{ steps.tag.outputs.tag }}
+          ref: ${{ steps.tag.outputs.ref }}
           fetch-depth: 0
           filter: blob:none
           sparse-checkout: |
@@ -62,16 +85,15 @@ jobs:
       # A conflict fails here, before any build, and nothing is published.
       - name: Apply the daily branch
         if: steps.tag.outputs.build == 'true'
-        env:
-          TAG: ${{ steps.tag.outputs.tag }}
         run: |
           set -euo pipefail
           git config user.name "daily-release"
           git config user.email "daily-release@users.noreply.github.com"
           git fetch -q "https://github.com/$GITHUB_REPOSITORY" daily:refs/remotes/fork/daily
-          git log --oneline "$TAG..fork/daily"
-          git cherry-pick "$TAG..fork/daily"
-          git diff --binary "$TAG" HEAD > "$RUNNER_TEMP/daily.patch"
+          base=$(git rev-parse HEAD)
+          git log --oneline "$base..fork/daily"
+          git cherry-pick "$base..fork/daily"
+          git diff --binary "$base" HEAD > "$RUNNER_TEMP/daily.patch"
 
       - if: steps.tag.outputs.build == 'true'
         uses: actions/upload-artifact@v7
@@ -94,7 +116,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: pingdotgg/t3code
-          ref: refs/tags/${{ needs.resolve.outputs.tag }}
+          ref: ${{ needs.resolve.outputs.ref }}
           sparse-checkout: |
             /*
             !/.repos/
@@ -332,6 +354,7 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.resolve.outputs.tag }}
+          UPSTREAM_BUILT: ${{ needs.resolve.outputs.upstream }}
         run: |
           set -euo pipefail
           cd assets
@@ -343,7 +366,7 @@ jobs:
             gh release view "$TAG" -R "${UPSTREAM#https://github.com/}" --json body -q .body || true
             echo
             echo
-            echo "Upstream [$TAG]($UPSTREAM/releases/tag/$TAG) with the [daily](https://github.com/$GITHUB_REPOSITORY/commits/daily) branch's patches."
+            echo "Upstream $UPSTREAM_BUILT with the [daily](https://github.com/$GITHUB_REPOSITORY/commits/daily) branch's patches."
           } > ../notes.md
           gh release create "$TAG" -R "$GITHUB_REPOSITORY" --target fork-ci --prerelease \
             --title "$TAG (daily)" \
