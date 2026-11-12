@@ -335,6 +335,8 @@ import {
   PreviewListResult,
   PreviewClearProfileError,
   PreviewClearProfileInput,
+  PreviewImportCookiesError,
+  PreviewImportCookiesInput,
   PreviewReportProfilesInput,
   PreviewStopLocalServerError,
   PreviewStopLocalServerInput,
@@ -344,6 +346,7 @@ import {
   PreviewAdjustInput,
   PreviewSessionSnapshot,
 } from "./preview.ts";
+import { BrowserImportResult } from "./browserImport.ts";
 import {
   DeviceActionInput,
   DeviceCloseInput,
@@ -548,6 +551,7 @@ export const WS_METHODS = {
   previewClose: "preview.close",
   previewList: "preview.list",
   previewClearProfile: "preview.clearProfile",
+  previewImportCookies: "preview.importCookies",
   previewReportProfiles: "preview.reportProfiles",
   previewReportStatus: "preview.reportStatus",
   previewStopLocalServer: "preview.stopLocalServer",
@@ -1972,6 +1976,12 @@ const WsPreviewClearProfileRpc = Rpc.make(WS_METHODS.previewClearProfile, {
   error: Schema.Union([PreviewClearProfileError, EnvironmentAuthorizationError]),
 });
 
+const WsPreviewImportCookiesRpc = Rpc.make(WS_METHODS.previewImportCookies, {
+  payload: PreviewImportCookiesInput,
+  success: BrowserImportResult,
+  error: Schema.Union([PreviewImportCookiesError, EnvironmentAuthorizationError]),
+});
+
 const WsPreviewReportProfilesRpc = Rpc.make(WS_METHODS.previewReportProfiles, {
   payload: PreviewReportProfilesInput,
   error: EnvironmentAuthorizationError,
@@ -2575,6 +2585,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsPreviewCloseRpc,
   WsPreviewListRpc,
   WsPreviewClearProfileRpc,
+  WsPreviewImportCookiesRpc,
   WsPreviewReportProfilesRpc,
   WsPreviewReportStatusRpc,
   WsSubscribePreviewEventsRpc,

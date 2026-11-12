@@ -69,6 +69,40 @@ export const DesktopPreviewImportCookiesInputSchema = Schema.Struct({
   targetProfileId: BrowserProfileId,
 });
 
+/** Chromium keeps at most a few thousand cookies per profile. */
+const BROWSER_IMPORT_MAX_COOKIES = 20_000;
+
+/** A decrypted cookie, in the shape Electron's `cookies.set` takes. */
+export const BrowserImportCookie = Schema.Struct({
+  url: Schema.String,
+  name: Schema.String,
+  value: Schema.String,
+  /** Absent for host-only cookies. */
+  domain: Schema.optional(Schema.String),
+  path: Schema.String,
+  secure: Schema.Boolean,
+  httpOnly: Schema.Boolean,
+  expirationDate: Schema.optional(Schema.Number),
+  sameSite: Schema.Literals(["unspecified", "no_restriction", "lax", "strict"]),
+});
+export type BrowserImportCookie = typeof BrowserImportCookie.Type;
+
+export const BrowserImportCookies = Schema.Array(BrowserImportCookie).check(
+  Schema.isMaxLength(BROWSER_IMPORT_MAX_COOKIES),
+);
+
+export const DesktopPreviewReadCookiesInputSchema = Schema.Struct({
+  sourceId: BrowserImportSourceId,
+  sourceProfileDirectory: TrimmedNonEmptyString,
+});
+
+export const BrowserCookieReadResult = Schema.Struct({
+  cookies: BrowserImportCookies,
+  undecryptable: Schema.Int,
+  undecryptableHosts: Schema.Array(Schema.String),
+});
+export type BrowserCookieReadResult = typeof BrowserCookieReadResult.Type;
+
 export const BrowserImportResult = Schema.Struct({
   imported: Schema.Int,
   skipped: Schema.Int,
