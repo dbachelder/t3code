@@ -35,6 +35,23 @@ and the page reloads, already signed in.
   then the server loads them into that tab's browser through a new `preview.importCookies` call.
 - The **Add profile** flow in **Settings → Browser** uses the same no-quit import.
 
+### Pinned skills beside the composer
+
+Skills you use often can sit as buttons next to the composer's attach button. One click sends the
+skill. Any text already in the composer goes with it, as `$skill your text`.
+
+- **Pin or unpin:** the pin button beside them opens a searchable list of the skills the
+  thread's provider offers. Check a skill to pin it, uncheck to unpin. **Settings → Chat →
+  Pinned skills** holds the same list as comma-separated names.
+- **Tooltips:** hovering a button shows the skill's description and its `argument-hint`, for
+  example `$ticket <ticket-id> [additional context]`.
+- **Required arguments:** when the hint has a `<required>` part and the composer is empty, a
+  click puts `$skill ` in the composer for you to finish instead of sending it. Skills with
+  only `[optional]` or no arguments send right away.
+- A button shows only when the thread's provider has that skill. Pins for other providers' skills
+  are kept. Hints come from Claude only, so Codex skills show a description but never count
+  as needing an argument.
+
 ### T3 Connect works when `--host` names a specific address
 
 Binding the server to one address, such as a Tailscale IP:
@@ -59,7 +76,7 @@ browser is not available in this build.
 
 ## How releases are built
 
-- `daily`: the patches, on top of an upstream nightly tag.
+- `daily`: the patches, on top of an upstream nightly tag or upstream `main`.
 - `fork-ci` (default branch): `.github/workflows/daily-release.yml`. Every 4 hours it takes the
   newest upstream nightly tag, cherry-picks `daily` onto it, builds the macOS arm64 app, the
   Linux x64 app (AppImage and .deb) and the Linux x64 `t3` archive, and publishes them here as a
@@ -104,3 +121,15 @@ git switch daily && git rebase --onto <new nightly tag> <old base tag> daily
 git push --force-with-lease fork daily
 gh workflow run daily-release.yml -R dbachelder/t3code
 ```
+
+To ship a patch before the next upstream nightly, build an upstream commit instead of a tag:
+
+```sh
+gh workflow run daily-release.yml -R dbachelder/t3code \
+  -f ref=<upstream commit SHA> -f version=0.1.10-nightly.<today YYYYMMDD>.<N>
+```
+
+Use `N` from `9001` up, one above the last manual build that day. Upstream's numbers stay below
+that, so a manual build never takes a version an upstream nightly will need. The catch: it outranks
+every later nightly from the same day, so the app skips those and updates again with the next
+day's first nightly.
