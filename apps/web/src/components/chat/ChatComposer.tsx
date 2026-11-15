@@ -282,9 +282,12 @@ import {
 } from "@t3tools/client-runtime/state/composer-dispatch";
 import { parseCodexFeedbackCommand } from "@t3tools/client-runtime/state/threads";
 import {
+  getPinnedProviderSkills,
   resolveProviderSkillsForCwd,
   resolveProviderSlashCommandsForCwd,
 } from "@t3tools/client-runtime/providerSkills";
+import { formatProviderSkillDisplayName } from "@t3tools/shared/inlineSkills";
+import { ComposerControl } from "./ComposerControl";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { Kbd } from "../ui/kbd";
 import { useSoftwareKeyboardOpen } from "../../hooks/useSoftwareKeyboardOpen";
@@ -1077,6 +1080,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const selectedProviderSkills = selectedProviderStatus
     ? resolveProviderSkillsForCwd(selectedProviderStatus, gitCwd)
     : NO_PROVIDER_SKILLS;
+  const pinnedSkills = getPinnedProviderSkills(selectedProviderSkills, settings.pinnedSkills);
   const selectedProviderSlashCommands = selectedProviderStatus
     ? resolveProviderSlashCommandsForCwd(selectedProviderStatus, gitCwd)
     : NO_PROVIDER_SLASH_COMMANDS;
@@ -2535,6 +2539,21 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     );
   };
   const handleSubmitMessageStable = useStableCallback(handleSubmitMessage);
+  const sendPinnedSkill = (skillName: string) => {
+    const draft = promptRef.current.trim();
+    const nextPrompt = draft ? `$${skillName} ${draft}` : `$${skillName}`;
+    promptRef.current = nextPrompt;
+    setPrompt(nextPrompt);
+    submitComposer(
+      undefined,
+      resolveComposerDispatchMode({
+        running: phase === "running" || phase === "connecting",
+        alternateModifier: false,
+        activeTurnDefault: followUpBehavior,
+        canSteer,
+      }),
+    );
+  };
   const submitCitationAndSend = () => {
     return submitComposer(
       undefined,
@@ -4186,6 +4205,28 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               >
                 {composerAttachButton && !dictationTakesFooter ? (
                   <div className="me-2">{composerAttachButton}</div>
+                ) : null}
+                {pinnedSkills.length > 0 && !dictationTakesFooter ? (
+                  <div className="me-2 flex shrink-0 items-center gap-0.5">
+                    {pinnedSkills.map((skill) => (
+                      <ComposerControl
+                        key={skill.name}
+                        disabled={
+                          !canOperateThread ||
+                          isSendBusy ||
+                          activePendingProgress !== null ||
+                          submissionBlocked
+                        }
+                        title={`Send $${skill.name}`}
+                        onPointerDown={(event) => event.preventDefault()}
+                        onClick={() => sendPinnedSkill(skill.name)}
+                      >
+                        <span data-composer-control-label>
+                          {formatProviderSkillDisplayName(skill)}
+                        </span>
+                      </ComposerControl>
+                    ))}
+                  </div>
                 ) : null}
                 <div
                   data-chat-composer-actions="right"

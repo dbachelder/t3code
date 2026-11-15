@@ -832,6 +832,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("command menu dollar $ slash /")],
   },
   {
+    id: "pinned-skills",
+    title: msg("Pinned skills"),
+    to: "/settings/chat",
+    searchTerms: [msg("skill buttons composer shortcut quick favorite pin")],
+  },
+  {
     id: "composer-rich-text",
     title: msg("Rich text composer"),
     to: "/settings/chat",

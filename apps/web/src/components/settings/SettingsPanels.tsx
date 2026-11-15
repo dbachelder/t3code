@@ -585,6 +585,7 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.showSkillsInSlashMenu !== DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu
       ? [gt("Show skills in slash menu")]
       : []),
+    ...(settings.pinnedSkills.length > 0 ? ["Pinned skills"] : []),
     ...(settings.composerRichTextEnabled !== DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled
       ? [gt("Rich text composer")]
       : []),
@@ -726,6 +727,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       diffLayout: DEFAULT_UNIFIED_SETTINGS.diffLayout,
       proactivePanelsEnabled: DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled,
       showSkillsInSlashMenu: DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu,
+      pinnedSkills: DEFAULT_UNIFIED_SETTINGS.pinnedSkills,
       composerRichTextEnabled: DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled,
       sendShortcut: DEFAULT_UNIFIED_SETTINGS.sendShortcut,
       followUpBehavior: DEFAULT_UNIFIED_SETTINGS.followUpBehavior,
@@ -1349,6 +1351,41 @@ export function ChatSettingsPanel() {
             }
           />
         </AdvancedSettings>
+        <SettingsRow
+          {...searchableSetting("pinned-skills")}
+          description="Skills to show as buttons beside the composer. Each button sends its skill right away."
+          resetAction={
+            settings.pinnedSkills.length > 0 ? (
+              <SettingResetButton
+                label="pinned skills"
+                onClick={() =>
+                  updateSettings({ pinnedSkills: DEFAULT_UNIFIED_SETTINGS.pinnedSkills })
+                }
+              />
+            ) : null
+          }
+          control={
+            <DraftInput
+              nativeInput
+              size="sm"
+              className="w-full sm:w-64"
+              aria-label="Pinned skills"
+              placeholder="babysit, wrap-up"
+              autoCapitalize="none"
+              spellCheck={false}
+              value={settings.pinnedSkills.join(", ")}
+              onCommit={(next) =>
+                updateSettings({
+                  // People type skills as $name or /name.
+                  pinnedSkills: next
+                    .split(/[\s,]+/)
+                    .map((name) => name.replace(/^[$/]/, ""))
+                    .filter(Boolean),
+                })
+              }
+            />
+          }
+        />
       </SettingsSection>
 
       <SettingsSection id="follow-ups" title={gt("Follow-ups")}>

@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
   createProviderWorkspaceSnapshotRefreshAtomFamily,
+  getPinnedProviderSkills,
   getProviderSkillsForSlashMenu,
   hasCompleteProviderWorkspaceSnapshot,
   isProviderWorkspaceSnapshotScanning,
@@ -40,6 +41,23 @@ const provider = {
     },
   ],
 } satisfies ServerProvider;
+
+describe("getPinnedProviderSkills", () => {
+  it("keeps pin order and drops pins the provider cannot run", () => {
+    const skills = [
+      { name: "wrap-up", path: "/a/wrap-up/SKILL.md", enabled: true },
+      { name: "Babysit", path: "/a/babysit/SKILL.md", enabled: true },
+      { name: "deploy", path: "/a/deploy/SKILL.md", enabled: false },
+      { name: "internal", path: "/a/internal/SKILL.md", enabled: true, userInvocable: false },
+    ];
+
+    expect(
+      getPinnedProviderSkills(skills, ["babysit", "missing", "deploy", "internal", "wrap-up"]).map(
+        (skill) => skill.name,
+      ),
+    ).toEqual(["Babysit", "wrap-up"]);
+  });
+});
 
 describe("getProviderSkillsForSlashMenu", () => {
   it("shows one row when enabled skills share a name", () => {
