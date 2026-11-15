@@ -52,6 +52,20 @@ export function getProviderSkillsForSlashMenu(
     : [];
 }
 
+/** Pinned skill names the provider offers, in pin order. */
+export function getPinnedProviderSkills(
+  skills: ReadonlyArray<ServerProviderSkill>,
+  pinnedSkillNames: ReadonlyArray<string>,
+): ServerProviderSkill[] {
+  const byName = new Map(
+    dedupeProviderSkillsByName(skills.filter(isProviderSkillUserInvocable)).map((skill) => [
+      skill.name.trim().toLowerCase(),
+      skill,
+    ]),
+  );
+  return pinnedSkillNames.flatMap((name) => byName.get(name.trim().toLowerCase()) ?? []);
+}
+
 export function getProviderSlashCommandsForSlashMenu(
   slashCommands: ReadonlyArray<ServerProviderSlashCommand>,
   visibleSkills: ReadonlyArray<ServerProviderSkill>,
