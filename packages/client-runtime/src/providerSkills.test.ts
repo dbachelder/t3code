@@ -11,12 +11,15 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   createProviderWorkspaceSnapshotRefreshAtomFamily,
   getPinnedProviderSkills,
+  getProviderSkillArgumentHint,
   getProviderSkillsForSlashMenu,
   hasCompleteProviderWorkspaceSnapshot,
   isProviderWorkspaceSnapshotScanning,
+  providerSkillArgumentHintIsRequired,
   resolveProviderSkillsForCwd,
   resolveProviderSlashCommandsForCwd,
   resolveProvidersForCwd,
+  setProviderSkillPinned,
 } from "./providerSkills.ts";
 
 const provider = {
@@ -55,6 +58,49 @@ describe("getPinnedProviderSkills", () => {
         (skill) => skill.name,
       ),
     ).toEqual(["Babysit", "wrap-up"]);
+  });
+});
+
+describe("getProviderSkillArgumentHint", () => {
+  it("reads the hint from the slash command with the same name", () => {
+    const commands = [
+      { name: "Ticket", input: { hint: "<ticket-id> [additional context]" } },
+      { name: "babysit", description: "Watch a PR" },
+    ];
+
+    expect(getProviderSkillArgumentHint("ticket", commands)).toBe(
+      "<ticket-id> [additional context]",
+    );
+    expect(getProviderSkillArgumentHint("babysit", commands)).toBeUndefined();
+    expect(getProviderSkillArgumentHint("missing", commands)).toBeUndefined();
+  });
+});
+
+describe("providerSkillArgumentHintIsRequired", () => {
+  it("treats only angle-bracket arguments as required", () => {
+    expect(providerSkillArgumentHintIsRequired("<ticket-id> [additional context]")).toBe(true);
+    expect(providerSkillArgumentHintIsRequired("[tag-or-date]")).toBe(false);
+    expect(providerSkillArgumentHintIsRequired("What will the next session be used for?")).toBe(
+      false,
+    );
+    expect(providerSkillArgumentHintIsRequired(undefined)).toBe(false);
+  });
+});
+
+describe("setProviderSkillPinned", () => {
+  it("appends a new pin and leaves an existing one where it is", () => {
+    expect(setProviderSkillPinned(["babysit"], "wrap-up", true)).toEqual(["babysit", "wrap-up"]);
+    expect(setProviderSkillPinned(["Babysit", "wrap-up"], "babysit", true)).toEqual([
+      "Babysit",
+      "wrap-up",
+    ]);
+  });
+
+  it("unpins by name in any case and keeps pins for other providers", () => {
+    expect(setProviderSkillPinned(["codex-only", "Babysit", "wrap-up"], "babysit", false)).toEqual([
+      "codex-only",
+      "wrap-up",
+    ]);
   });
 });
 

@@ -52,18 +52,54 @@ export function getProviderSkillsForSlashMenu(
     : [];
 }
 
+/** Skills a user can pin as composer buttons. */
+export function getPinnableProviderSkills(
+  skills: ReadonlyArray<ServerProviderSkill>,
+): ServerProviderSkill[] {
+  return dedupeProviderSkillsByName(skills.filter(isProviderSkillUserInvocable));
+}
+
 /** Pinned skill names the provider offers, in pin order. */
 export function getPinnedProviderSkills(
   skills: ReadonlyArray<ServerProviderSkill>,
   pinnedSkillNames: ReadonlyArray<string>,
 ): ServerProviderSkill[] {
   const byName = new Map(
-    dedupeProviderSkillsByName(skills.filter(isProviderSkillUserInvocable)).map((skill) => [
-      skill.name.trim().toLowerCase(),
-      skill,
-    ]),
+    getPinnableProviderSkills(skills).map((skill) => [skill.name.trim().toLowerCase(), skill]),
   );
   return pinnedSkillNames.flatMap((name) => byName.get(name.trim().toLowerCase()) ?? []);
+}
+
+/**
+ * A skill's `argument-hint`. Claude reports hints on its slash commands, not on skills,
+ * so this matches the two lists by name. Other providers report none.
+ */
+export function getProviderSkillArgumentHint(
+  skillName: string,
+  slashCommands: ReadonlyArray<ServerProviderSlashCommand>,
+): string | undefined {
+  const key = skillName.trim().toLowerCase();
+  return slashCommands.find((command) => command.name.trim().toLowerCase() === key)?.input?.hint;
+}
+
+/** By convention `<arg>` is required and `[arg]` is optional; free-text hints count as optional. */
+export function providerSkillArgumentHintIsRequired(hint: string | undefined): boolean {
+  return hint !== undefined && /<[^>]+>/.test(hint);
+}
+
+/**
+ * Pins or unpins one skill. Pins for skills the current provider lacks stay put,
+ * so switching providers never loses them.
+ */
+export function setProviderSkillPinned(
+  pinnedSkillNames: ReadonlyArray<string>,
+  skillName: string,
+  pinned: boolean,
+): string[] {
+  const key = skillName.trim().toLowerCase();
+  const others = pinnedSkillNames.filter((name) => name.trim().toLowerCase() !== key);
+  if (!pinned) return others;
+  return others.length < pinnedSkillNames.length ? [...pinnedSkillNames] : [...others, skillName];
 }
 
 export function getProviderSlashCommandsForSlashMenu(

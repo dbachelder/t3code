@@ -1336,12 +1336,14 @@ export function ChatSettingsPanel() {
           />
         </AdvancedSettings>
         <SettingsRow
-          {...searchableSetting("pinned-skills")}
-          description="Skills to show as buttons beside the composer. Each button sends its skill right away."
+          {...setting("pinned-skills")}
+          description={gt(
+            "Skills to show as buttons beside the composer. Each button sends its skill right away.",
+          )}
           resetAction={
             settings.pinnedSkills.length > 0 ? (
               <SettingResetButton
-                label="pinned skills"
+                ariaLabel={gt("Reset pinned skills to default")}
                 onClick={() =>
                   updateSettings({ pinnedSkills: DEFAULT_UNIFIED_SETTINGS.pinnedSkills })
                 }
@@ -1353,8 +1355,8 @@ export function ChatSettingsPanel() {
               nativeInput
               size="sm"
               className="w-full sm:w-64"
-              aria-label="Pinned skills"
-              placeholder="babysit, wrap-up"
+              aria-label={gt("Pinned skills")}
+              placeholder={gt("Skill names, comma-separated")}
               autoCapitalize="none"
               spellCheck={false}
               value={settings.pinnedSkills.join(", ")}
