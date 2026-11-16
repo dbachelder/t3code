@@ -343,10 +343,12 @@ function pullRequestWatchTasks(
             description: `Watching pull request #${link.number}`,
             kind: "monitor" as const,
             // Once every check finished, a person moves the PR next: the watch stays on but holds
-            // nothing, unless the agent said it acts on the PR itself. A merged PR's watch holds
-            // until its read wakes the agent, so settling on merge waits.
+            // nothing, unless the agent said it acts on the PR itself or a review it asked for is
+            // still outstanding. A merged PR's watch holds until its read wakes the agent, so
+            // settling on merge waits.
             ...(link.watch.checksPending === false &&
             link.watch.until !== "merged" &&
+            link.watch.reviewsPending !== true &&
             link.snapshot?.state !== "merged"
               ? {}
               : { awaited: true as const }),

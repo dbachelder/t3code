@@ -63,6 +63,7 @@ export function evaluatePullRequestWatch(
     | "author"
     | "rebaseRequired"
     | "mergeQueueRemoval"
+    | "reviewers"
   >,
   remarks: ReadonlyArray<PullRequestComment> | null,
   now: number,
@@ -237,6 +238,9 @@ export function evaluatePullRequestWatch(
   });
   const actionable = fresh.filter((remark) => !isReviewAcknowledgement(remark));
   if (actionable.length > 0) changes.push({ kind: "remarks", remarks: actionable });
+  const reviewApproved =
+    watch.reviewApproved === true ||
+    fresh.some((remark) => remark.reviewState?.toUpperCase() === "APPROVED");
   const latest = Math.max(through, ...fresh.map((remark) => Date.parse(activeAt(remark))));
   const atLatest = fresh.filter((remark) => Date.parse(activeAt(remark)) === latest);
   const remarksThrough = latest === through ? watch.remarksThrough : activeAt(atLatest[0]!);
@@ -304,6 +308,10 @@ export function evaluatePullRequestWatch(
       checksAwaitedSince,
       checksPending,
       ...(watch.until !== undefined && { until: watch.until }),
+      ...(detail.capabilities.pendingReviewers === true && {
+        reviewsPending: !reviewApproved && detail.reviewers.length > 0,
+      }),
+      ...(reviewApproved && { reviewApproved }),
     },
     exhausted: commentsOnly && wakes >= PULL_REQUEST_WATCH_WAKE_LIMIT,
   };

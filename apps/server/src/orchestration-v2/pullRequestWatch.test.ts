@@ -61,6 +61,7 @@ const detail = (overrides: Partial<Detail> = {}): Detail => ({
   mergeability: "mergeable",
   viewer: "agent-user",
   author: { login: "agent-user", name: null, avatarUrl: null },
+  reviewers: [],
   ...overrides,
 });
 
@@ -1306,6 +1307,37 @@ Review triggered.
     assert.isFalse(pending([], watch({ headSha: "aaaaaaaaaa", checksPending: false })));
     const unreadable = { ...check("approvals", "action-required"), placeholder: true };
     assert.isTrue(pending([unreadable], watch({ headSha: "aaaaaaaaaa", checksPending: true })));
+  });
+
+  it("counts a review as pending while one is requested, only where the host reports them", () => {
+    const johnny = { login: "johnny", name: null, avatarUrl: null };
+    const pending = (pendingReviewers: boolean | undefined, reviewers: Detail["reviewers"]) =>
+      evaluatePullRequestWatch(
+        watch(),
+        detail({ capabilities: { ...capabilities(true), pendingReviewers }, reviewers }),
+        noRemarks,
+      ).next.reviewsPending;
+    assert.isTrue(pending(true, [johnny]));
+    assert.isFalse(pending(true, []));
+    assert.isUndefined(pending(undefined, [johnny]));
+
+    // Each approval reaches the inbox: one lets go of the hold for the rest of the watch, even
+    // with another review still requested. The viewer's own approval does not count.
+    const github = detail({
+      capabilities: { ...capabilities(true), pendingReviewers: true },
+      reviewers: [johnny],
+    });
+    const approval = (login: string) => ({
+      ...remark(login, "2026-10-02T12:05:00.000Z"),
+      kind: "review" as const,
+      reviewState: "APPROVED",
+    });
+    assert.isTrue(
+      evaluatePullRequestWatch(watch(), github, [approval("agent-user")]).next.reviewsPending,
+    );
+    const approved = evaluatePullRequestWatch(watch(), github, [approval("dana")]).next;
+    assert.isFalse(approved.reviewsPending);
+    assert.isFalse(evaluatePullRequestWatch(approved, github, noRemarks).next.reviewsPending);
   });
 
   it("waits a while for a new head's checks on every host", () => {
