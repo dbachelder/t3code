@@ -40,6 +40,8 @@ and the page reloads, already signed in.
 Skills you use often can sit as buttons next to the composer's attach button. One click sends the
 skill. Any text already in the composer goes with it, as `$skill your text`.
 
+![The composer with babysit and wrap-up pinned as buttons next to the attach button, and the pin button after them](docs/pinned-skills.png)
+
 - **Pin or unpin:** the pin button beside them opens a searchable list of the skills the
   thread's provider offers. Check a skill to pin it, uncheck to unpin. **Settings → Chat →
   Pinned skills** holds the same list as comma-separated names.
