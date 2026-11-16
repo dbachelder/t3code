@@ -319,6 +319,11 @@ export const PullRequestCapabilities = Schema.Struct({
    * reported rather than that the repository runs none. Absent means an empty list says nothing.
    */
   checksAlwaysReport: Schema.optional(Schema.Boolean),
+  /**
+   * A detail read's `reviewers` are only the reviews still requested, so an empty list means no
+   * review is outstanding. Absent means the list says nothing about what is still owed.
+   */
+  pendingReviewers: Schema.optional(Schema.Boolean),
   /** The diff can read one file the paged diff withheld as too large (`PullRequestDiffInput.path`). */
   withheldFileDiff: Schema.optional(Schema.Boolean),
 });

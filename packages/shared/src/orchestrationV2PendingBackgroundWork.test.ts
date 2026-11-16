@@ -531,6 +531,20 @@ describe("derivePendingBackgroundWork kinds", () => {
         ],
       });
       expect(backgroundWorkHoldsCompletion(untilMerged)).toBe(true);
+
+      // A requested review still outstanding holds the thread after its checks finish.
+      const reviewing = derivePendingBackgroundWork({
+        latestRun: { id: "run-1" as never, ordinal: 1, status: "completed" },
+        providerThreads: [],
+        turnItems: [],
+        pullRequests: [
+          {
+            ...link(1, {}),
+            watch: { ...watch, passed: true, checksPending: false, reviewsPending: true },
+          },
+        ],
+      });
+      expect(backgroundWorkHoldsCompletion(reviewing)).toBe(true);
     });
 
     it("lists no watch while a run is active", () => {

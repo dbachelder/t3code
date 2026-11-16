@@ -123,6 +123,16 @@ export const ThreadPullRequestWatch = Schema.Struct({
   checksPending: Schema.optional(Schema.Boolean),
   /** How long the watch holds its thread. Absent means until every check finished. */
   until: Schema.optional(Schema.Literal("merged")),
+  /**
+   * Whether a requested review was still outstanding at the last read, on hosts that report it.
+   * Like running checks, it keeps the thread waiting.
+   */
+  reviewsPending: Schema.optional(Schema.Boolean),
+  /**
+   * Someone other than the viewer approved since this watch started. From then on a requested
+   * review no longer keeps the thread waiting, so each approval reaches the user's inbox.
+   */
+  reviewApproved: Schema.optional(Schema.Boolean),
 });
 export type ThreadPullRequestWatch = typeof ThreadPullRequestWatch.Type;
 
