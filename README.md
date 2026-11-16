@@ -52,6 +52,20 @@ skill. Any text already in the composer goes with it, as `$skill your text`.
   are kept. Hints come from Claude only, so Codex skills show a description but never count
   as needing an argument.
 
+### A watched pull request stays in Working while a review is requested
+
+Upstream, a thread watching a pull request (`watch_pull_request`, or asking the agent to babysit
+it) stays in **Working** only while the PR's checks run. Once they finish, it drops to your inbox,
+even when the agent is just waiting for a reviewer it asked for.
+
+Here, on GitHub, the thread also stays in **Working** while any requested review is outstanding:
+until every requested reviewer has reviewed, or the request is removed. The watch still wakes the
+agent on that review, as before. To bring the thread back to your inbox sooner, the agent calls
+`unwatch_pull_request` (or you click the eye in the thread details card).
+
+Other hosts behave as upstream. A host opts in with the `pendingReviewers` capability, which says
+its detail read lists only reviews still owed.
+
 ### T3 Connect works when `--host` names a specific address
 
 Binding the server to one address, such as a Tailscale IP:
