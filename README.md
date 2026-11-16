@@ -60,8 +60,13 @@ even when the agent is just waiting for a reviewer it asked for.
 
 Here, on GitHub, the thread also stays in **Working** while any requested review is outstanding:
 until every requested reviewer has reviewed, or the request is removed. The watch still wakes the
-agent on that review, as before. To bring the thread back to your inbox sooner, the agent calls
-`unwatch_pull_request` (or you click the eye in the thread details card).
+agent on that review, as before.
+
+Every approval still reaches your inbox. Ask two people and get one approval: the thread comes back
+to you with it. From that approval on, the remaining requests stop holding the thread for the rest
+of that watch, so later reviews land in your inbox too; watching the PR again holds afresh. To bring
+the thread back sooner, the agent calls `unwatch_pull_request` (or you click the eye in the thread
+details card).
 
 Other hosts behave as upstream. A host opts in with the `pendingReviewers` capability, which says
 its detail read lists only reviews still owed.
