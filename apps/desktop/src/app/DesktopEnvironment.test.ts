@@ -72,4 +72,17 @@ describe("DesktopEnvironment", () => {
       assert.equal(production.stateDir, "/Users/alice/.t3/userdata");
     }),
   );
+
+  it.effect("lets a launch check keep its macOS profile apart from the user's open app", () =>
+    Effect.gen(function* () {
+      const standard = yield* makeEnvironment();
+      const separate = yield* makeEnvironment(
+        {},
+        { T3CODE_DESKTOP_APP_DATA_DIR: "/tmp/launch-check/app-data" },
+      );
+
+      assert.equal(standard.appDataDirectory, "/Users/alice/Library/Application Support");
+      assert.equal(separate.appDataDirectory, "/tmp/launch-check/app-data");
+    }),
+  );
 });

@@ -44,11 +44,13 @@ try {
     // Linux CI runners do not allow the Chromium sandbox's user namespaces.
     args: [...(values.app ? [NodePath.resolve(values.app)] : []), "--no-sandbox"],
     // HOME stays real: on macOS a fake HOME has no login keychain, and safeStorage blocks the
-    // main process on a keychain dialog. macOS keeps its Electron profile in the runner's HOME.
+    // main process on a keychain dialog. The Electron profile moves to the temp dir instead.
     env: {
       ...process.env,
       XDG_CONFIG_HOME: NodePath.join(home, ".config"),
       XDG_DATA_HOME: NodePath.join(home, ".local/share"),
+      // On a developer's Mac, an open copy of the app would otherwise hold the profile's lock.
+      T3CODE_DESKTOP_APP_DATA_DIR: NodePath.join(home, "app-data"),
       T3CODE_HOME: t3Home,
       T3CODE_TELEMETRY_ENABLED: "false",
       T3CODE_DISABLE_AUTO_UPDATE: "true",
