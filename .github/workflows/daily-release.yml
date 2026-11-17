@@ -18,6 +18,11 @@ on:
       version:
         description: "Version for a ref build: X.Y.Z-nightly.YYYYMMDD.N, above the installed one and no upstream tag."
         required: false
+      mac_runner:
+        description: "Where the macOS job runs: the owner's Mac (self-hosted) or GitHub's runners."
+        type: choice
+        options: [self-hosted, github]
+        default: self-hosted
 
 concurrency:
   group: daily-release
@@ -154,9 +159,13 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  # The owner's Mac runs this job (label t3-daily-mac) unless a manual run picks GitHub's
+  # runners. Scheduled runs have no inputs, so they use the Mac too. On that Mac the job
+  # uses the owner's own vp and cargo, and a certificate already trusted, instead of
+  # installing toolchains into the owner's home or calling sudo.
   mac:
     needs: [resolve, bundle]
-    runs-on: macos-15
+    runs-on: ${{ inputs.mac_runner == 'github' && 'macos-15' || 't3-daily-mac' }}
     timeout-minutes: 75
     env:
       TAG: ${{ needs.resolve.outputs.tag }}
@@ -166,9 +175,12 @@ jobs:
       - *download-patch
       - *prepare
 
-      - uses: ./.github/actions/setup-ci-deps
+      - if: runner.environment == 'github-hosted'
+        uses: ./.github/actions/setup-ci-deps
         with:
           install-args: --filter=@t3tools/desktop... --filter=t3... --filter=@t3tools/scripts...
+      - if: runner.environment != 'github-hosted'
+        run: vp install --filter=@t3tools/desktop... --filter=t3... --filter=@t3tools/scripts...
 
       - *versions
 
@@ -177,7 +189,8 @@ jobs:
           name: js-bundle
           path: apps
 
-      - uses: dtolnay/rust-toolchain@stable
+      - if: runner.environment == 'github-hosted'
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin
 
@@ -193,7 +206,12 @@ jobs:
           printf '%s' "$CSC_LINK" | base64 --decode > "$RUNNER_TEMP/signing.p12"
           /usr/bin/openssl pkcs12 -in "$RUNNER_TEMP/signing.p12" -clcerts -nokeys -passin env:CSC_KEY_PASSWORD -out "$RUNNER_TEMP/signing.pem"
           rm "$RUNNER_TEMP/signing.p12"
-          sudo security add-trusted-cert -d -r trustRoot -p codeSign -k /Library/Keychains/System.keychain "$RUNNER_TEMP/signing.pem"
+          if [[ "$RUNNER_ENVIRONMENT" == github-hosted ]]; then
+            sudo security add-trusted-cert -d -r trustRoot -p codeSign -k /Library/Keychains/System.keychain "$RUNNER_TEMP/signing.pem"
+          elif ! security verify-cert -c "$RUNNER_TEMP/signing.pem" -p codeSign >/dev/null; then
+            echo "::error::Trust the signing certificate for code signing on this Mac once (see README.md)."
+            exit 1
+          fi
           echo "CERT_SHA1=$(/usr/bin/openssl x509 -in "$RUNNER_TEMP/signing.pem" -noout -fingerprint -sha1 | sed 's/.*=//; s/://g')" >> "$GITHUB_ENV"
 
       - name: Build signed desktop app

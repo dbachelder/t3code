@@ -88,6 +88,12 @@ only loopback origins, so it answered 401, which the server misread as "link rev
 loopback forwarder in front of the server if nothing listens there. A host already marked
 revoked recovers on its own once it starts this build; don't re-link it.
 
+### The launch check can run beside an open app
+
+`T3CODE_DESKTOP_APP_DATA_DIR` moves the desktop app's Electron profile, and with it the
+single-instance lock, to another folder. `scripts/smoke-desktop-app.ts` sets it, so the release
+build's launch check works on a Mac where T3 Code (Nightly) is already open.
+
 ### macOS builds without an Apple team
 
 When `T3CODE_APPLE_TEAM_ID` is unset, `scripts/build-desktop-artifact.ts` signs the app with
@@ -104,6 +110,10 @@ browser is not available in this build.
   Linux x64 app (AppImage and .deb) and the Linux x64 `t3` archive, and publishes them here as a
   release with the same version. If the
   patches stop applying, the run fails and nothing is published.
+- The macOS job runs on the owner's Mac, a self-hosted runner labelled `t3-daily-mac`, because
+  GitHub's hosted macOS runners are often unavailable for hours. While that Mac is asleep or off,
+  the job waits for it. To build one run on GitHub's runners instead, start it by hand with
+  `-f mac_runner=github`.
 
 The macOS app is signed with a self-signed certificate (secrets `CSC_LINK`, `CSC_KEY_PASSWORD`). The in-app
 updater only installs builds signed by the same certificate, so do not replace it.
@@ -134,6 +144,32 @@ T3CODE_RELEASE_BASE_URL=https://github.com/dbachelder/t3code/releases/download \
 
 `t3 update` without a version picks the newest upstream nightly, which fails until this
 repository has published it.
+
+## The self-hosted Mac runner
+
+It lives in `~/actions-runner-t3code` and runs as a launchd agent in the owner's login session
+(it needs one to open the app's window for the launch check). It's registered to this repository
+only, with no default labels, so only jobs that ask for `t3-daily-mac` run on it. Outside
+contributors' pull request workflows need approval before they run at all (**Settings → Actions →
+Approval for running fork pull request workflows → Require approval for all external
+contributors**), since a public repository's pull requests could otherwise run code on the Mac.
+
+On the Mac, the job uses the owner's own `vp` and Homebrew `cargo` instead of installing toolchains
+into their home, and it expects the signing certificate to be trusted for code signing already.
+Set it up once:
+
+```sh
+sudo security add-trusted-cert -d -r trustRoot -p codeSign -k /Library/Keychains/System.keychain ~/.config/t3code-daily/cert.pem
+cd ~/actions-runner-t3code
+./config.sh --url https://github.com/dbachelder/t3code --token <registration token> \
+  --name "$(scutil --get LocalHostName)-t3-daily" --labels t3-daily-mac --no-default-labels --work _work
+./svc.sh install && ./svc.sh start     # ./svc.sh stop / uninstall to remove it
+```
+
+Get the registration token with
+`gh api -X POST repos/dbachelder/t3code/actions/runners/registration-token -q .token`. The service
+keeps the `PATH` it was installed with, so reinstall it (`./svc.sh uninstall && ./svc.sh install`)
+after moving `vp` or `cargo`.
 
 ## Changing the patches
 
