@@ -221,9 +221,12 @@ export function evaluatePullRequestWatch(
     );
   });
   if (fresh.length > 0) changes.push({ kind: "remarks", remarks: fresh });
+  // Only a person's approval lets go of the hold; an automated reviewer's doesn't.
   const reviewApproved =
     watch.reviewApproved === true ||
-    fresh.some((remark) => remark.reviewState?.toUpperCase() === "APPROVED");
+    fresh.some(
+      (remark) => remark.reviewState?.toUpperCase() === "APPROVED" && !remark.author?.isBot,
+    );
   const latest = Math.max(through, ...fresh.map((remark) => Date.parse(activeAt(remark))));
   const atLatest = fresh.filter((remark) => Date.parse(activeAt(remark)) === latest);
   const remarksThrough = latest === through ? watch.remarksThrough : activeAt(atLatest[0]!);

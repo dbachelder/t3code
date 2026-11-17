@@ -372,12 +372,12 @@ the **Working** section, including after the agent pushes a fix. Once every chec
 including review bots that report as checks, the thread returns to your inbox: what happens next is
 up to a person. That includes a workflow waiting for a maintainer to approve it, which runs only
 once someone does. On GitHub, a review someone was asked for counts as work too: the thread stays in
-**Working** until every requested reviewer has reviewed or the request is removed. An approval
-always reaches your inbox: once someone approves, the remaining requests stop holding the thread
-for the rest of that watch. If you ask the agent to act on the pull request itself, such as merging
-it once a teammate approves, the thread stays in **Working** until the pull request merges or
-closes. The watch stays on and still wakes the agent on new comments, failed checks or conflicts,
-and a watched thread never auto-settles.
+**Working** until every requested reviewer has reviewed or the request is removed. A person's
+approval always reaches your inbox: once someone approves, the remaining requests stop holding the
+thread until the agent watches the pull request again. A bot's approval doesn't count. If you ask
+the agent to act on the pull request itself, such as merging it once a teammate approves, the thread
+stays in **Working** until the pull request merges or closes. The watch stays on and still wakes the
+agent on new comments, failed checks or conflicts, and a watched thread never auto-settles.
 
 Cross-repository links use a project on the same host. Azure DevOps reviews require a project checked
 out from the matching organization and repository.
