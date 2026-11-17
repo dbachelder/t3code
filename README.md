@@ -64,9 +64,10 @@ Here, on GitHub, the thread also stays in **Working** while any requested review
 until every requested reviewer has reviewed, or the request is removed. The watch still wakes the
 agent on that review, as before.
 
-Every approval still reaches your inbox. Ask two people and get one approval: the thread comes back
-to you with it. From that approval on, the remaining requests stop holding the thread for the rest
-of that watch, so later reviews land in your inbox too; watching the PR again holds afresh. To bring
+Every approval from a person still reaches your inbox. Ask two people and get one approval: the
+thread comes back to you with it. From that approval on, the remaining requests stop holding the
+thread, so later reviews land in your inbox too, until the agent watches the PR again (babysit does
+on every request), which holds afresh. A bot's approval, such as roomie-review's, doesn't count. To bring
 the thread back sooner, the agent calls `unwatch_pull_request` (or you click the eye in the thread
 details card).
 
