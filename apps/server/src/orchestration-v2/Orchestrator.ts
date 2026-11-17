@@ -940,6 +940,12 @@ const withoutChecksAnswer = ({
   ...watch
 }: ThreadPullRequestWatch): ThreadPullRequestWatch => watch;
 
+const withoutReviewApproval = (watch: ThreadPullRequestWatch): ThreadPullRequestWatch => {
+  if (watch.reviewApproved === undefined) return watch;
+  const { reviewApproved: _approved, ...rest } = watch;
+  return rest;
+};
+
 function legacyPullRequestLink(
   thread: OrchestrationV2AppThread,
   linked: ThreadLinkedPullRequest,
@@ -5533,49 +5539,54 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               : !command.watching
                 ? undefined
                 : withUntil(
-                    existing.watch ?? {
-                      startedAt,
-                      headSha: null,
-                      failedChecks: [],
-                      passed: false,
-                      passedChecks: [],
-                      conflicting: false,
-                      // Watching again must not repeat check or conflict news the last watch told.
-                      ...(existing.endedWatch && {
-                        headSha: existing.endedWatch.headSha,
-                        failedChecks: existing.endedWatch.failedChecks,
-                        passed: existing.endedWatch.passed,
-                        passedChecks: existing.endedWatch.passedChecks,
-                        conflicting: existing.endedWatch.conflicting,
-                        rebaseRequired: existing.endedWatch.rebaseRequired,
-                      }),
-                      awaitingBaseline: existing.endedWatch
-                        ? existing.endedWatch.awaitingBaseline
-                        : "all",
-                      ...(existing.endedWatch?.owedChecks !== undefined && {
-                        owedChecks: existing.endedWatch.owedChecks,
-                      }),
-                      ...(existing.endedWatch?.awaitingApproval !== undefined && {
-                        awaitingApproval: existing.endedWatch.awaitingApproval,
-                      }),
-                      ...(existing.endedWatch?.approvalAnnounced !== undefined && {
-                        approvalAnnounced: existing.endedWatch.approvalAnnounced,
-                      }),
-                      // CI pending with no failure yet at the start may fail before the first
-                      // read. A caller's fresh read beats the link's last sync; a finished-checks
-                      // answer kept from the last watch may be an older head's.
-                      ...((command.type === "thread.pull-request.watch" &&
-                      command.checksPending !== undefined
-                        ? command.checksPending
-                        : existing.snapshot?.checksState === "pending" ||
-                          existing.endedWatch?.checksPending === true) && { checksPending: true }),
-                      ...(existing.endedWatch?.checksAwaitedSince !== undefined && {
-                        checksAwaitedSince: existing.endedWatch.checksAwaitedSince,
-                      }),
-                      remarksThrough: startedAt,
-                      remarkIds: [],
-                      wakes: 0,
-                    },
+                    existing.watch !== undefined
+                      ? // Watching again holds afresh for requested reviews an approval let go of.
+                        withoutReviewApproval(existing.watch)
+                      : {
+                          startedAt,
+                          headSha: null,
+                          failedChecks: [],
+                          passed: false,
+                          passedChecks: [],
+                          conflicting: false,
+                          // Watching again must not repeat check or conflict news the last watch told.
+                          ...(existing.endedWatch && {
+                            headSha: existing.endedWatch.headSha,
+                            failedChecks: existing.endedWatch.failedChecks,
+                            passed: existing.endedWatch.passed,
+                            passedChecks: existing.endedWatch.passedChecks,
+                            conflicting: existing.endedWatch.conflicting,
+                            rebaseRequired: existing.endedWatch.rebaseRequired,
+                          }),
+                          awaitingBaseline: existing.endedWatch
+                            ? existing.endedWatch.awaitingBaseline
+                            : "all",
+                          ...(existing.endedWatch?.owedChecks !== undefined && {
+                            owedChecks: existing.endedWatch.owedChecks,
+                          }),
+                          ...(existing.endedWatch?.awaitingApproval !== undefined && {
+                            awaitingApproval: existing.endedWatch.awaitingApproval,
+                          }),
+                          ...(existing.endedWatch?.approvalAnnounced !== undefined && {
+                            approvalAnnounced: existing.endedWatch.approvalAnnounced,
+                          }),
+                          // CI pending with no failure yet at the start may fail before the first
+                          // read. A caller's fresh read beats the link's last sync; a finished-checks
+                          // answer kept from the last watch may be an older head's.
+                          ...((command.type === "thread.pull-request.watch" &&
+                          command.checksPending !== undefined
+                            ? command.checksPending
+                            : existing.snapshot?.checksState === "pending" ||
+                              existing.endedWatch?.checksPending === true) && {
+                            checksPending: true,
+                          }),
+                          ...(existing.endedWatch?.checksAwaitedSince !== undefined && {
+                            checksAwaitedSince: existing.endedWatch.checksAwaitedSince,
+                          }),
+                          remarksThrough: startedAt,
+                          remarkIds: [],
+                          wakes: 0,
+                        },
                     command.until,
                   );
           if (watch === existing.watch && links === linked) return thread;

@@ -1338,6 +1338,15 @@ Review triggered.
     const approved = evaluatePullRequestWatch(watch(), github, [approval("dana")]).next;
     assert.isFalse(approved.reviewsPending);
     assert.isFalse(evaluatePullRequestWatch(approved, github, noRemarks).next.reviewsPending);
+
+    // A bot's approval, such as an automated reviewer's, leaves the requested person's hold.
+    const botApproval = {
+      ...approval("roomie-review"),
+      author: { login: "roomie-review", name: null, avatarUrl: null, isBot: true },
+    };
+    const botApproved = evaluatePullRequestWatch(watch(), github, [botApproval]).next;
+    assert.isTrue(botApproved.reviewsPending);
+    assert.isUndefined(botApproved.reviewApproved);
   });
 
   it("waits a while for a new head's checks on every host", () => {

@@ -4422,6 +4422,25 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
       assert.isTrue((yield* maintenance.rebuild).valid);
       assert.deepEqual(yield* watchOf, recorded);
 
+      // Watching again holds afresh for requested reviews; the rest of the watch carries on.
+      yield* orchestrator.dispatch({
+        type: "thread.pull-request-watch.sync",
+        commandId: CommandId.make("pr-watch-record-approval"),
+        threadId,
+        ...key,
+        startedAt: started.startedAt,
+        watch: { ...recorded, reviewsPending: false, reviewApproved: true },
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.pull-request.watch",
+        commandId: CommandId.make("pr-watch-again"),
+        threadId,
+        ...key,
+        watching: true,
+        link: { url, source: "agent" },
+      });
+      assert.deepEqual(yield* watchOf, { ...recorded, reviewsPending: false });
+
       yield* orchestrator.dispatch({
         type: "thread.pull-request.watch",
         commandId: CommandId.make("pr-watch-stop"),
