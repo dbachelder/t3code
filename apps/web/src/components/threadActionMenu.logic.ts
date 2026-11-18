@@ -126,7 +126,7 @@ export interface ThreadActionMenuState {
   readonly canTurnIntoProject?: boolean;
 }
 
-/** The snooze submenu: flat presets, the "In" and "Next week" drill-downs, then Custom. */
+/** The snooze submenu: flat presets, the "In" and "Another day" drill-downs, then Custom. */
 export function buildSnoozeMenuChildren(
   presets: ReadonlyArray<SnoozePreset>,
   drillDown: ReadonlyArray<SnoozeMenuNode>,
