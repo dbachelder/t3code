@@ -530,7 +530,7 @@ describe("pickSnoozePreset", () => {
     expect(picked?.snoozedUntil).toBe(localDate(2026, 8, 31, 9).toISOString());
   });
 
-  it("resolves drill-down picks: durations from the pick, next-week times as shown", () => {
+  it("resolves drill-down picks: durations from the pick, day-and-hour times as shown", () => {
     const shown = resolveSnoozePresets(localDate(2026, 8, 30, 23, 59));
     const pick = (id: string, now: Date) => pickSnoozePreset({ shown, id, now })?.snoozedUntil;
     const pickedAt = localDate(2026, 9, 2, 10, 15);
@@ -543,21 +543,33 @@ describe("pickSnoozePreset", () => {
 });
 
 describe("snoozeDrillDownMenu", () => {
-  const nextWeek = (now: Date) => {
-    const days = snoozeDrillDownMenu(now).find((node) => node.id === "next-week")!.children!;
+  const anotherDay = (now: Date) => {
+    const days = snoozeDrillDownMenu(now).find((node) => node.id === "another-day")!.children!;
     return days.map((day) => [day.id, day.children!.length, day.children![9]!.id]);
   };
 
-  it("lists Monday to Friday of the coming week, each with 24 hours", () => {
-    const week = (dates: ReadonlyArray<number>) =>
-      dates.map((date) => [
-        `next-week:2026-09-${String(date).padStart(2, "0")}`,
+  it("lists the 10 days from tomorrow, each with 24 hours", () => {
+    const days = (dates: ReadonlyArray<[number, number]>) =>
+      dates.map(([month, date]) => [
+        `another-day:2026-${String(month).padStart(2, "0")}-${String(date).padStart(2, "0")}`,
         24,
-        `until:${localDate(2026, 9, date, 9).toISOString()}`,
+        `until:${localDate(2026, month, date, 9).toISOString()}`,
       ]);
-    // Sunday: next week starts tomorrow. Monday: it starts a week out.
-    expect(nextWeek(localDate(2026, 9, 6, 14))).toEqual(week([7, 8, 9, 10, 11]));
-    expect(nextWeek(localDate(2026, 8, 31, 14))).toEqual(week([7, 8, 9, 10, 11]));
+    // Late Saturday, across a month end.
+    expect(anotherDay(localDate(2026, 8, 29, 23, 30))).toEqual(
+      days([
+        [8, 30],
+        [8, 31],
+        [9, 1],
+        [9, 2],
+        [9, 3],
+        [9, 4],
+        [9, 5],
+        [9, 6],
+        [9, 7],
+        [9, 8],
+      ]),
+    );
   });
 
   it("offers 1 to 24 hours and 1 to 14 days", () => {

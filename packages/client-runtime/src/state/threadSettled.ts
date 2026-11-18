@@ -421,13 +421,14 @@ export interface SnoozeMenuNode {
 
 const SNOOZE_MENU_HOURS = 24;
 const SNOOZE_MENU_DAYS = 14;
+const SNOOZE_MENU_ANOTHER_DAYS = 10;
 
 function oneTo(count: number): ReadonlyArray<number> {
   return Array.from({ length: count }, (_, index) => index + 1);
 }
 
 /**
- * "In → Hours/Days → n" and "Next week → Mon–Fri → hour". Next-week ids carry the shown
+ * "In → Hours/Days → n" and "Another day → the next 10 days → hour". Day ids carry the shown
  * wake time, so a pick after midnight still lands on the day the menu showed.
  */
 export function snoozeDrillDownMenu(
@@ -435,7 +436,6 @@ export function snoozeDrillDownMenu(
   formatTime: (date: Date) => string = snoozeTimeOfDayLabel,
   resolve: MFunctionType = mFallback,
 ): ReadonlyArray<SnoozeMenuNode> {
-  const nextMonday = addSnoozeDays(now, (WEEKDAY_INDEX.monday - now.getDay() + 7) % 7 || 7);
   return [
     {
       id: "in",
@@ -464,12 +464,12 @@ export function snoozeDrillDownMenu(
       ],
     },
     {
-      id: "next-week",
-      label: resolve(msg("Next week")),
-      children: [0, 1, 2, 3, 4].map((offset) => {
-        const day = addSnoozeDays(nextMonday, offset);
+      id: "another-day",
+      label: resolve(msg("Another day")),
+      children: oneTo(SNOOZE_MENU_ANOTHER_DAYS).map((offset) => {
+        const day = addSnoozeDays(now, offset);
         return {
-          id: `next-week:${localSnoozeDate(day)}`,
+          id: `another-day:${localSnoozeDate(day)}`,
           label: day.toLocaleDateString(undefined, {
             weekday: "long",
             month: "short",
