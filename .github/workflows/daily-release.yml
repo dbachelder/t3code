@@ -150,6 +150,15 @@ jobs:
 
       - run: vp run build:desktop:bundle
 
+      # Artifacts drop hidden directories, so the Vite manifest travels under a visible name
+      # (as upstream's release.yml does) and the platform jobs move it back.
+      - name: Stage web asset manifest
+        run: |
+          manifest=apps/server/dist/client/.vite/manifest.json
+          if [[ -f "$manifest" ]]; then
+            cp "$manifest" apps/server/dist/client/vite-manifest.release.json
+          fi
+
       - uses: actions/upload-artifact@v7
         with:
           name: js-bundle
@@ -188,6 +197,15 @@ jobs:
         with:
           name: js-bundle
           path: apps
+
+      - &restore-manifest
+        name: Restore web asset manifest
+        run: |
+          client=apps/server/dist/client
+          if [[ -f "$client/vite-manifest.release.json" ]]; then
+            mkdir -p "$client/.vite"
+            mv "$client/vite-manifest.release.json" "$client/.vite/manifest.json"
+          fi
 
       - if: runner.environment == 'github-hosted'
         uses: dtolnay/rust-toolchain@stable
@@ -286,6 +304,8 @@ jobs:
         with:
           name: js-bundle
           path: apps
+
+      - *restore-manifest
 
       - uses: dtolnay/rust-toolchain@stable
         with:
